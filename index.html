@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0d0f1a" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="乐谱库" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <title>乐谱库 · MusicScore</title>
+  <meta name="description" content="一款优雅的乐谱与图片管理应用，支持分类存储、搜索与浏览。" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="logo">
+        <div class="logo-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <path d="M9 18V5l12-2v13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="6" cy="18" r="3" stroke="currentColor" stroke-width="2"/>
+            <circle cx="18" cy="16" r="3" stroke="currentColor" stroke-width="2"/>
+          </svg>
+        </div>
+        <span class="logo-text">乐谱库</span>
+      </div>
+      <button class="sidebar-toggle" id="sidebarToggle" title="收起侧栏">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+          <path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="sidebar-search">
+      <div class="search-box">
+        <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none">
+          <circle cx="11" cy="11" r="8" stroke="currentColor" stroke-width="2"/>
+          <path d="m21 21-4.35-4.35" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <input type="text" id="globalSearch" placeholder="搜索乐谱..." autocomplete="off" />
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-section">
+        <span class="nav-section-title">浏览</span>
+        <button class="nav-item active" id="navAll" data-filter="all">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/>
+            <rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/>
+            <rect x="3" y="14" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/>
+            <rect x="14" y="14" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/>
+          </svg>
+          <span>全部</span>
+          <span class="badge" id="badgeAll">0</span>
+        </button>
+        <button class="nav-item" id="navFavorites" data-filter="favorites">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>收藏</span>
+          <span class="badge" id="badgeFav">0</span>
+        </button>
+      </div>
+
+      <div class="nav-section">
+        <div class="nav-section-header">
+          <span class="nav-section-title">分类</span>
+          <button class="add-category-btn" id="addCategoryBtn" title="新建分类">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+        <div id="categoryList" class="category-list">
+          <!-- Categories rendered here -->
+        </div>
+      </div>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="storage-info">
+        <div class="storage-label">
+          <span>存储使用</span>
+          <span id="storageSize">0 MB</span>
+        </div>
+        <div class="storage-bar">
+          <div class="storage-fill" id="storageFill" style="width: 0%"></div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main" id="mainContent">
+    <!-- Top Bar -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="mobile-menu-btn" id="mobileMenuBtn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path d="M3 12h18M3 6h18M3 18h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+        <div class="page-title-wrap">
+          <h1 class="page-title" id="pageTitle">全部乐谱</h1>
+          <span class="page-subtitle" id="pageSubtitle">管理您的所有乐谱与图片</span>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <div class="view-toggle">
+          <button class="view-btn active" id="viewGrid" title="网格视图">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/>
+              <rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/>
+              <rect x="3" y="14" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/>
+              <rect x="14" y="14" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/>
+            </svg>
+          </button>
+          <button class="view-btn" id="viewList" title="列表视图">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+        <div class="sort-select-wrap">
+          <select id="sortSelect">
+            <option value="date-desc">最新上传</option>
+            <option value="date-asc">最早上传</option>
+            <option value="name-asc">名称 A-Z</option>
+            <option value="name-desc">名称 Z-A</option>
+          </select>
+        </div>
+        <button class="upload-btn" id="uploadBtn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <polyline points="17 8 12 3 7 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <line x1="12" y1="3" x2="12" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          上传图片
+        </button>
+      </div>
+    </header>
+
+    <!-- Score Grid -->
+    <div class="content-area" id="contentArea">
+      <div class="score-grid" id="scoreGrid">
+        <!-- Cards rendered here -->
+      </div>
+      <div class="empty-state" id="emptyState" style="display:none">
+        <div class="empty-icon">
+          <svg width="64" height="64" viewBox="0 0 24 24" fill="none">
+            <path d="M9 18V5l12-2v13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="6" cy="18" r="3" stroke="currentColor" stroke-width="1.5"/>
+            <circle cx="18" cy="16" r="3" stroke="currentColor" stroke-width="1.5"/>
+          </svg>
+        </div>
+        <h3 id="emptyTitle">还没有乐谱</h3>
+        <p id="emptyDesc">点击右上角「上传图片」按钮，开始添加您的第一张乐谱吧！</p>
+        <button class="empty-upload-btn" id="emptyUploadBtn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <polyline points="17 8 12 3 7 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <line x1="12" y1="3" x2="12" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+          上传第一张乐谱
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <!-- Drop Zone Overlay -->
+  <div class="drop-overlay" id="dropOverlay">
+    <div class="drop-content">
+      <svg width="64" height="64" viewBox="0 0 24 24" fill="none">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <polyline points="17 8 12 3 7 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        <line x1="12" y1="3" x2="12" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      <p>松开鼠标即可上传</p>
+    </div>
+  </div>
+
+  <!-- Upload Modal -->
+  <div class="modal-backdrop" id="uploadModalBackdrop">
+    <div class="modal" id="uploadModal">
+      <div class="modal-header">
+        <h2>上传乐谱</h2>
+        <button class="modal-close" id="uploadModalClose">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="upload-zone" id="uploadZone">
+          <input type="file" id="fileInput" accept="image/*" multiple hidden />
+          <div class="upload-zone-content">
+            <div class="upload-zone-icon">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <polyline points="17 8 12 3 7 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <line x1="12" y1="3" x2="12" y2="15" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <p class="upload-zone-text">拖拽图片至此处，或<button class="link-btn" id="browseBtn">浏览文件</button></p>
+            <p class="upload-zone-hint">支持 JPG、PNG、WebP、GIF，可多选</p>
+          </div>
+        </div>
+
+        <!-- Preview list -->
+        <div class="upload-preview-list" id="uploadPreviewList"></div>
+
+        <div class="upload-form" id="uploadForm" style="display:none">
+          <div class="form-group">
+            <label for="uploadTitle">标题</label>
+            <input type="text" id="uploadTitle" placeholder="输入乐谱标题..." />
+          </div>
+          <div class="form-group">
+            <label for="uploadCategory">分类</label>
+            <select id="uploadCategory">
+              <option value="">— 不分类 —</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="uploadTags">标签（逗号分隔）</label>
+            <input type="text" id="uploadTags" placeholder="例如：钢琴, 古典, 贝多芬" />
+          </div>
+          <div class="form-group">
+            <label for="uploadNotes">备注</label>
+            <textarea id="uploadNotes" rows="2" placeholder="添加备注..."></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer" id="uploadModalFooter" style="display:none">
+        <button class="btn-secondary" id="uploadCancel">取消</button>
+        <button class="btn-primary" id="uploadConfirm">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+            <path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          保存
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Category Modal -->
+  <div class="modal-backdrop" id="categoryModalBackdrop">
+    <div class="modal modal-sm" id="categoryModal">
+      <div class="modal-header">
+        <h2 id="categoryModalTitle">新建分类</h2>
+        <button class="modal-close" id="categoryModalClose">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="categoryName">分类名称</label>
+          <input type="text" id="categoryName" placeholder="例如：古典音乐、流行、练习曲..." maxlength="30" />
+        </div>
+        <div class="form-group">
+          <label>选择颜色</label>
+          <div class="color-picker" id="colorPicker">
+            <button class="color-dot active" data-color="#a78bfa" style="background:#a78bfa"></button>
+            <button class="color-dot" data-color="#60a5fa" style="background:#60a5fa"></button>
+            <button class="color-dot" data-color="#34d399" style="background:#34d399"></button>
+            <button class="color-dot" data-color="#fbbf24" style="background:#fbbf24"></button>
+            <button class="color-dot" data-color="#f87171" style="background:#f87171"></button>
+            <button class="color-dot" data-color="#fb923c" style="background:#fb923c"></button>
+            <button class="color-dot" data-color="#e879f9" style="background:#e879f9"></button>
+            <button class="color-dot" data-color="#2dd4bf" style="background:#2dd4bf"></button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" id="categoryCancel">取消</button>
+        <button class="btn-primary" id="categoryConfirm">创建</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Image Viewer Modal -->
+  <div class="viewer-backdrop" id="viewerBackdrop">
+    <div class="viewer" id="viewer">
+      <div class="viewer-topbar">
+        <div class="viewer-info">
+          <span class="viewer-title" id="viewerTitle"></span>
+          <span class="viewer-category" id="viewerCategory"></span>
+        </div>
+        <div class="viewer-actions">
+          <button class="viewer-btn" id="viewerFav" title="收藏">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" stroke="currentColor" stroke-width="2"/>
+            </svg>
+          </button>
+          <button class="viewer-btn" id="viewerEdit" title="编辑">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <button class="viewer-btn" id="viewerDownload" title="下载">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <polyline points="7 10 12 15 17 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <line x1="12" y1="15" x2="12" y2="3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <button class="viewer-btn danger" id="viewerDelete" title="删除">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <polyline points="3 6 5 6 21 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M10 11v6M14 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <button class="viewer-btn" id="viewerClose" title="关闭">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div class="viewer-body">
+        <button class="viewer-nav prev" id="viewerPrev">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <div class="viewer-img-wrap">
+          <img id="viewerImg" src="" alt="乐谱预览" />
+        </div>
+        <button class="viewer-nav next" id="viewerNext">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="viewer-footer">
+        <div class="viewer-tags" id="viewerTags"></div>
+        <span class="viewer-date" id="viewerDate"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Modal -->
+  <div class="modal-backdrop" id="editModalBackdrop">
+    <div class="modal modal-sm" id="editModal">
+      <div class="modal-header">
+        <h2>编辑信息</h2>
+        <button class="modal-close" id="editModalClose">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+            <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="editTitle">标题</label>
+          <input type="text" id="editTitle" placeholder="乐谱标题..." />
+        </div>
+        <div class="form-group">
+          <label for="editCategory">分类</label>
+          <select id="editCategory">
+            <option value="">— 不分类 —</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="editTags">标签（逗号分隔）</label>
+          <input type="text" id="editTags" placeholder="例如：钢琴, 古典" />
+        </div>
+        <div class="form-group">
+          <label for="editNotes">备注</label>
+          <textarea id="editNotes" rows="2" placeholder="添加备注..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" id="editCancel">取消</button>
+        <button class="btn-primary" id="editConfirm">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
