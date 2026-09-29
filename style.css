@@ -204,13 +204,13 @@ img{display:block;max-width:100%}
 body{background:var(--bg0);color:var(--txt1)}
 
 .bg-layer{
-  position:fixed;inset:0;z-index:0;
+  position:fixed;top:0;right:0;bottom:0;left:0;inset:0;z-index:0;
   background-size:cover;background-position:center;
   transition:opacity .4s ease;
   pointer-events:none;
 }
 .bg-overlay{
-  position:fixed;inset:0;z-index:1;
+  position:fixed;top:0;right:0;bottom:0;left:0;inset:0;z-index:1;
   background:var(--bg0);
   pointer-events:none;
 }
@@ -480,7 +480,7 @@ body{background:var(--bg0);color:var(--txt1)}
    DRAG OVERLAY
    ══════════════════════════════════════════ */
 .drop-overlay{
-  position:fixed;inset:0;z-index:9000;
+  position:fixed;top:0;right:0;bottom:0;left:0;inset:0;z-index:9000;
   display:none;align-items:center;justify-content:center;
   background:rgba(0,0,0,.5);backdrop-filter:blur(6px);
 }
@@ -498,7 +498,7 @@ body{background:var(--bg0);color:var(--txt1)}
    SETTINGS PANEL (right drawer)
    ══════════════════════════════════════════ */
 .panel-backdrop{
-  position:fixed;inset:0;z-index:150;
+  position:fixed;top:0;right:0;bottom:0;left:0;inset:0;z-index:150;
   background:rgba(0,0,0,.5);backdrop-filter:blur(6px);
   display:none;
 }
@@ -616,7 +616,7 @@ body{background:var(--bg0);color:var(--txt1)}
    MODALS
    ══════════════════════════════════════════ */
 .modal-backdrop{
-  position:fixed;inset:0;z-index:200;
+  position:fixed;top:0;right:0;bottom:0;left:0;inset:0;z-index:200;
   background:rgba(0,0,0,.65);backdrop-filter:blur(8px);
   display:none;align-items:center;justify-content:center;padding:20px;
 }
@@ -754,7 +754,7 @@ body{background:var(--bg0);color:var(--txt1)}
    VIEWER
    ══════════════════════════════════════════ */
 .viewer-backdrop{
-  position:fixed;inset:0;z-index:400;
+  position:fixed;top:0;right:0;bottom:0;left:0;inset:0;z-index:400;
   background:rgba(0,0,0,.93);backdrop-filter:blur(20px);
   display:none;flex-direction:column;
 }
@@ -832,7 +832,7 @@ body{background:var(--bg0);color:var(--txt1)}
    SIDEBAR OVERLAY (mobile)
    ══════════════════════════════════════════ */
 .sidebar-overlay{
-  display:none;position:fixed;inset:0;z-index:99;
+  display:none;position:fixed;top:0;right:0;bottom:0;left:0;inset:0;z-index:99;
   background:rgba(0,0,0,.5);backdrop-filter:blur(2px);
 }
 .sidebar-overlay.active{display:block}
@@ -856,8 +856,8 @@ body{background:var(--bg0);color:var(--txt1)}
   .content-area{padding:14px}
   .score-grid{grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px}
   .viewer-nav-btn{display:none}
-  .modal{border-radius:20px 20px 0 0;position:fixed;bottom:0;left:0;right:0;max-width:100%;max-height:92dvh;margin:0}
-  .modal-backdrop{padding:0;align-items:flex-end}
+  .modal{border-radius:20px 20px 0 0;position:fixed;bottom:0;left:0;right:0;width:100%;max-width:100%;max-height:92vh;max-height:92dvh;margin:0}
+  .modal-backdrop{top:0;right:0;bottom:0;left:0;padding:0;align-items:flex-end}
   .settings-panel{width:100%;max-width:100%}
   .form-row{grid-template-columns:1fr}
 }
