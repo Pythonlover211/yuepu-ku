@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=2" />
+  <link rel="stylesheet" href="style.css?v=3" />
 </head>
 <body>
 
@@ -318,6 +318,17 @@
             <button class="diff-btn" data-level="5">★★★★★ 专业</button>
           </div>
         </div>
+        <!-- Multi-page Merge Option -->
+        <div class="form-group merge-pages-group" id="mergePagesGroup" style="display:none">
+          <label class="merge-toggle-card">
+            <input type="checkbox" id="mergePagesCheck" checked />
+            <span class="merge-checkbox-box"></span>
+            <div class="merge-toggle-info">
+              <span class="merge-toggle-title">📚 合并为一本多页乐谱</span>
+              <span class="merge-toggle-desc">将选中的所有图片作为同一首乐谱的连续页（看谱时可顺畅翻页）</span>
+            </div>
+          </label>
+        </div>
       </div>
     </div>
     <div class="modal-footer" id="uploadModalFooter" style="display:none">
@@ -383,11 +394,15 @@
   </div>
 </div>
 
-<!-- ░░░ IMAGE VIEWER ░░░ -->
+<!-- ░░░ ENHANCED IMAGE VIEWER ░░░ -->
 <div class="viewer-backdrop" id="viewerBackdrop">
-  <div class="viewer-topbar">
+  <!-- Topbar -->
+  <div class="viewer-topbar" id="viewerTopbar">
     <div class="viewer-info-wrap">
-      <span class="viewer-title" id="viewerTitle"></span>
+      <div class="viewer-title-row">
+        <span class="viewer-title" id="viewerTitle"></span>
+        <span class="viewer-page-tag" id="viewerPageTag" style="display:none">1/1</span>
+      </div>
       <div class="viewer-meta-row">
         <span class="viewer-cat" id="viewerCat"></span>
         <span class="viewer-composer" id="viewerComposer"></span>
@@ -395,37 +410,134 @@
       </div>
     </div>
     <div class="viewer-actions">
+      <!-- 滤镜切换 -->
+      <button class="viewer-btn" id="viewerFilterBtn" title="滤镜模式（原图/护眼/夜间反相/高对比）">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg>
+      </button>
+      <!-- 画笔标注 -->
+      <button class="viewer-btn" id="viewerAnnotBtn" title="手绘与指法标注">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 19l7-7 3 3-7 7-3-3z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 2l7.586 7.586" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <!-- 纯净全屏演奏 / 防息屏 -->
+      <button class="viewer-btn" id="viewerStageBtn" title="纯净演奏模式（全屏+防息屏常亮）">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
       <button class="viewer-btn" id="viewerFav" title="收藏">
         <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" stroke="currentColor" stroke-width="2"/></svg>
       </button>
       <button class="viewer-btn" id="viewerEdit" title="编辑">
         <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
-      <button class="viewer-btn" id="viewerDownload" title="下载">
+      <button class="viewer-btn" id="viewerDownload" title="下载当前乐谱">
         <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="7 10 12 15 17 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="12" y1="15" x2="12" y2="3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       </button>
       <button class="viewer-btn danger" id="viewerDelete" title="删除">
         <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><polyline points="3 6 5 6 21 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 11v6M14 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
-      <button class="viewer-btn" id="viewerClose" title="关闭">
+      <button class="viewer-btn" id="viewerClose" title="关闭 (Esc)">
         <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       </button>
     </div>
   </div>
-  <div class="viewer-body">
-    <button class="viewer-nav-btn prev" id="viewerPrev">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+
+  <!-- Filter Popup Dropdown -->
+  <div class="filter-dropdown" id="filterDropdown">
+    <div class="filter-dropdown-title">视觉与护眼滤镜</div>
+    <button class="filter-opt active" data-filter="normal">
+      <span class="filter-icon">🎨</span>
+      <span class="filter-text">原图模式</span>
     </button>
-    <div class="viewer-img-wrap">
-      <img id="viewerImg" src="" alt="乐谱预览" />
-    </div>
-    <button class="viewer-nav-btn next" id="viewerNext">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <button class="filter-opt" data-filter="sepia">
+      <span class="filter-icon">📜</span>
+      <span class="filter-text">护眼羊皮纸 (暖色防疲劳)</span>
+    </button>
+    <button class="filter-opt" data-filter="invert">
+      <span class="filter-icon">🌙</span>
+      <span class="filter-text">夜间黑底反相 (弱光不晃眼)</span>
+    </button>
+    <button class="filter-opt" data-filter="contrast">
+      <span class="filter-icon">⚡</span>
+      <span class="filter-text">高对比度锐化 (增强泛黄浅淡谱)</span>
     </button>
   </div>
-  <div class="viewer-footer">
+
+  <!-- Annotation Floating Toolbar -->
+  <div class="annot-toolbar" id="annotToolbar" style="display:none">
+    <div class="annot-group">
+      <button class="annot-tool-btn active" data-tool="pen" title="铅笔">✏️ 铅笔</button>
+      <button class="annot-tool-btn" data-tool="highlighter" title="荧光高亮">🖍️ 荧光</button>
+      <button class="annot-tool-btn" data-tool="eraser" title="橡皮擦">🧹 橡皮</button>
+    </div>
+    <div class="annot-sep"></div>
+    <div class="annot-group" id="annotColorGroup">
+      <button class="annot-color-dot active" data-color="#ef4444" style="background:#ef4444" title="红色"></button>
+      <button class="annot-color-dot" data-color="#3b82f6" style="background:#3b82f6" title="蓝色"></button>
+      <button class="annot-color-dot" data-color="#eab308" style="background:#eab308" title="黄色"></button>
+      <button class="annot-color-dot" data-color="#22c55e" style="background:#22c55e" title="绿色"></button>
+      <button class="annot-color-dot" data-color="#0f172a" style="background:#0f172a" title="黑色"></button>
+    </div>
+    <div class="annot-sep"></div>
+    <div class="annot-group">
+      <button class="annot-action-btn" id="annotUndoBtn" title="撤销上一笔">↩️</button>
+      <button class="annot-action-btn" id="annotClearBtn" title="清空本页标注">🗑️</button>
+      <button class="annot-done-btn" id="annotDoneBtn">完成</button>
+    </div>
+  </div>
+
+  <!-- Viewer Body with Stage & Viewport -->
+  <div class="viewer-body" id="viewerBody">
+    <!-- Click zones for stage mode flip -->
+    <div class="viewer-click-zone left" id="viewerZoneLeft" title="点击上一页"></div>
+    <div class="viewer-click-zone center" id="viewerZoneCenter" title="点击呼出/隐藏工具栏"></div>
+    <div class="viewer-click-zone right" id="viewerZoneRight" title="点击下一页"></div>
+
+    <button class="viewer-nav-btn prev" id="viewerPrev" title="上一首乐谱">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+
+    <div class="viewer-viewport" id="viewerViewport">
+      <div class="viewer-stage-layer" id="viewerStageLayer">
+        <img id="viewerImg" class="viewer-score-img" src="" alt="乐谱预览" draggable="false" />
+        <canvas id="annotationCanvas" class="annotation-canvas"></canvas>
+      </div>
+    </div>
+
+    <button class="viewer-nav-btn next" id="viewerNext" title="下一首乐谱">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+
+    <!-- Floating Zoom Controls -->
+    <div class="viewer-zoom-bar" id="viewerZoomBar">
+      <button class="zoom-btn" id="zoomOutBtn" title="缩小 (-)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+      </button>
+      <button class="zoom-val-btn" id="zoomResetBtn" title="重置 100%">100%</button>
+      <button class="zoom-btn" id="zoomInBtn" title="放大 (+)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+      </button>
+      <button class="zoom-btn" id="zoomFitBtn" title="适应窗口">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2"/><path d="M9 3v18M15 3v18" stroke="currentColor" stroke-width="2"/></svg>
+      </button>
+    </div>
+
+    <!-- Floating Multi-page Navigation Pill -->
+    <div class="viewer-page-pill" id="viewerPagePill" style="display:none">
+      <button class="page-pill-btn" id="pagePillPrev" title="上一页 (PageUp / ←)">‹</button>
+      <span class="page-pill-text" id="pagePillText">第 1 / 1 页</span>
+      <button class="page-pill-btn" id="pagePillNext" title="下一页 (PageDown / →)">›</button>
+    </div>
+
+    <!-- Stage Mode Hint Banner -->
+    <div class="stage-mode-hint" id="stageModeHint">
+      <span>💡 点击两侧翻页 · 点击中央呼出工具栏 · 屏幕常亮已启用</span>
+    </div>
+  </div>
+
+  <div class="viewer-footer" id="viewerFooter">
     <div class="viewer-tags-wrap" id="viewerTags"></div>
-    <div class="viewer-counter" id="viewerCounter">1 / 1</div>
+    <div class="viewer-counter-wrap">
+      <span class="viewer-counter" id="viewerCounter">1 / 1</span>
+    </div>
   </div>
 </div>
 

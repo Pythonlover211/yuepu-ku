@@ -38,6 +38,12 @@ const S = {
   theme: 'midnight',
   bgDataURL: null, bgBlur: 8, bgOverlay: 60,
   viewerList: [], viewerIdx: -1,
+  viewerPageIdx: 0,
+  zoomScale: 1.0, panX: 0, panY: 0,
+  filterMode: 'normal',
+  isAnnotating: false, annotTool: 'pen', annotColor: '#ef4444',
+  annotHistory: [],
+  isStageMode: false, wakeLock: null,
   selColor: '#a78bfa', selEmoji: '🎵', selDiff: 0,
   editCatId: null, editScoreId: null,
   pendingFiles: [],
@@ -55,6 +61,12 @@ function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(
 function fmtDate(ts){ const d=new Date(ts); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 function fmtSize(b){ if(b<1024)return b+'B'; if(b<1048576)return(b/1024).toFixed(1)+'KB'; return(b/1048576).toFixed(2)+'MB'; }
 function fileToDataURL(file){ return new Promise(res=>{ const r=new FileReader(); r.onload=e=>res(e.target.result); r.readAsDataURL(file); }); }
+function hexToRgba(hex, alpha){
+  let c = hex.replace('#','');
+  if(c.length===3) c=c.split('').map(x=>x+x).join('');
+  const num=parseInt(c,16);
+  return `rgba(${(num>>16)&255}, ${(num>>8)&255}, ${num&255}, ${alpha})`;
+}
 
 function toast(msg, type=''){
   const el=document.createElement('div');
@@ -310,6 +322,9 @@ function renderScores(){
     const cat=S.categories.find(c=>c.id===score.categoryId);
     const card=document.createElement('div');
     card.className='score-card'; card.dataset.id=score.id;
+    const pagesCount = (score.pages && score.pages.length) ? score.pages.length : 1;
+    const pageBadge = pagesCount > 1 ? `<div class="card-pages-badge">📄 ${pagesCount}页</div>` : '';
+    const pageTagHtml = pagesCount > 1 ? `<span class="tag" style="background:rgba(167,139,250,.18);color:var(--primary);font-weight:600">📄 ${pagesCount}页</span>` : '';
     const tagsHtml=(score.tags||[]).slice(0,3).map(t=>`<span class="tag">${esc(t)}</span>`).join('');
     const diffHtml=score.difficulty?`<div class="diff-badge">${DIFF_LABELS[score.difficulty]||''}</div>`:'';
     const isFav=score.favorite;
@@ -317,6 +332,7 @@ function renderScores(){
     if(S.viewMode==='grid'){
       card.innerHTML=`
         <div class="card-thumb">
+          ${pageBadge}
           <img src="${score.dataURL}" alt="${esc(score.title)}" loading="lazy"/>
           <div class="card-overlay">
             <button class="card-quick-btn fav-btn${isFav?' is-fav':''}" data-id="${score.id}" title="收藏">
@@ -330,18 +346,21 @@ function renderScores(){
           ${cat?`<div class="card-cat" style="color:${cat.color}">${esc((cat.emoji||'')+'  '+cat.name)}</div>`:''}
           <div class="card-title">${esc(score.title)}</div>
           ${score.composer?`<div class="card-composer">🎼 ${esc(score.composer)}</div>`:''}
-          <div class="card-tags">${tagsHtml}</div>
+          <div class="card-tags">${pageTagHtml}${tagsHtml}</div>
           ${diffHtml}
         </div>`;
     } else {
       card.innerHTML=`
-        <div class="card-thumb"><img src="${score.dataURL}" alt="${esc(score.title)}" loading="lazy"/></div>
+        <div class="card-thumb">
+          ${pageBadge}
+          <img src="${score.dataURL}" alt="${esc(score.title)}" loading="lazy"/>
+        </div>
         <div class="card-body">
           <div class="card-main">
             ${cat?`<div class="card-cat" style="color:${cat.color}">${esc((cat.emoji||'')+' '+cat.name)}</div>`:''}
             <div class="card-title">${esc(score.title)}</div>
             ${score.composer?`<div class="card-composer">🎼 ${esc(score.composer)}</div>`:''}
-            <div class="card-tags">${tagsHtml}${diffHtml}</div>
+            <div class="card-tags">${pageTagHtml}${tagsHtml}${diffHtml}</div>
           </div>
           <span class="card-date">${fmtDate(score.createdAt)}</span>
         </div>`;
@@ -366,6 +385,8 @@ function openUploadModal(){
   $('uploadPreviewList').innerHTML='';
   $('uploadForm').style.display='none';
   $('uploadModalFooter').style.display='none';
+  if($('mergePagesGroup')) $('mergePagesGroup').style.display='none';
+  if($('mergePagesCheck')) $('mergePagesCheck').checked=true;
   $('uploadTitle').value=''; $('uploadComposer').value='';
   $('uploadTags').value=''; $('uploadNotes').value='';
   $('uploadCategory').value=''; S.selDiff=0;
@@ -395,20 +416,23 @@ async function handleFiles(files){
   renderUploadPreviews();
   $('uploadForm').style.display='block';
   $('uploadModalFooter').style.display='flex';
+  if($('mergePagesGroup')){
+    $('mergePagesGroup').style.display = S.pendingFiles.length > 1 ? 'block' : 'none';
+  }
   if(S.pendingFiles.length===1 && !$('uploadTitle').value)
     $('uploadTitle').value=S.pendingFiles[0].name.replace(/\.[^.]+$/,'');
 }
 
 function renderUploadPreviews(){
   const list=$('uploadPreviewList'); list.innerHTML='';
-  S.pendingFiles.forEach(file=>{
+  S.pendingFiles.forEach((file, fIdx)=>{
     const url=URL.createObjectURL(file);
     const div=document.createElement('div'); div.className='upload-preview-item';
     div.innerHTML=`
       <div class="upload-preview-thumb"><img src="${url}" alt=""/></div>
       <div class="upload-preview-info">
         <div class="upload-preview-name">${esc(file.name)}</div>
-        <div class="upload-preview-size">${fmtSize(file.size)}</div>
+        <div class="upload-preview-size">${fmtSize(file.size)} · 第 ${fIdx+1} 页</div>
       </div>
       <button class="upload-preview-remove" title="移除">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
@@ -416,6 +440,7 @@ function renderUploadPreviews(){
     div.querySelector('.upload-preview-remove').addEventListener('click',()=>{
       S.pendingFiles=S.pendingFiles.filter(f=>f!==file);
       renderUploadPreviews();
+      if($('mergePagesGroup')) $('mergePagesGroup').style.display = S.pendingFiles.length > 1 ? 'block' : 'none';
       if(!S.pendingFiles.length){ $('uploadForm').style.display='none'; $('uploadModalFooter').style.display='none'; }
     });
     list.appendChild(div);
@@ -432,11 +457,61 @@ async function confirmUpload(){
     const tags=$('uploadTags').value.split(',').map(t=>t.trim()).filter(Boolean);
     const notes=$('uploadNotes').value.trim();
     const difficulty=S.selDiff;
+    const shouldMerge = S.pendingFiles.length > 1 && $('mergePagesCheck')?.checked;
+
+    if(shouldMerge){
+      const dataURLs = [];
+      let totalSize = 0;
+      for(let i=0; i<S.pendingFiles.length; i++){
+        const file = S.pendingFiles[i];
+        totalSize += file.size;
+        const dUrl = await fileToDataURL(file);
+        dataURLs.push(dUrl);
+      }
+      const score = {
+        id: uid(),
+        title,
+        categoryId,
+        composer,
+        tags,
+        notes,
+        difficulty,
+        dataURL: dataURLs[0],
+        pages: dataURLs,
+        annotations: {},
+        filterMode: 'normal',
+        fileSize: totalSize,
+        fileType: S.pendingFiles[0].type,
+        favorite: false,
+        createdAt: Date.now()
+      };
+      await dbPut('scores', score);
+      S.scores.push(score);
+      closeUploadModal();
+      renderAll();
+      toast(`已保存多页乐谱《${title}》（共 ${dataURLs.length} 页） 🎵`, 'success');
+      S.pendingFiles = [];
+      return;
+    }
+
     for(let i=0;i<S.pendingFiles.length;i++){
       const file=S.pendingFiles[i];
       const dataURL=await fileToDataURL(file);
-      const score={ id:uid(), title:S.pendingFiles.length>1?`${title} (${i+1})`:title, categoryId, composer, tags, notes, difficulty, dataURL, fileSize:file.size, fileType:file.type, favorite:false, createdAt:Date.now() };
-      await dbPut('scores',score); S.scores.push(score);
+      const score={
+        id:uid(),
+        title:S.pendingFiles.length>1?`${title} (${i+1})`:title,
+        categoryId, composer, tags, notes, difficulty,
+        dataURL,
+        pages: [dataURL],
+        annotations: {},
+        filterMode: 'normal',
+        fileSize:file.size,
+        fileType:file.type,
+        favorite:false,
+        createdAt:Date.now()
+      };
+      await dbPut('scores',score);
+      S.scores.push(score);
     }
     closeUploadModal(); renderAll();
     toast(`已添加 ${S.pendingFiles.length} 张乐谱 🎵`,'success');
@@ -495,62 +570,408 @@ async function deleteCategory(id){
 }
 
 // ─────────────────────────────────────────
-// Viewer
+// Enhanced Viewer
 // ─────────────────────────────────────────
-function openViewer(idx, list){
-  S.viewerList=list; S.viewerIdx=idx;
+const FILTER_NAMES = {
+  normal: '原图模式',
+  sepia: '护眼羊皮纸 (暖色)',
+  invert: '夜间黑底反相',
+  contrast: '高对比度锐化'
+};
+
+function openViewer(idx, list, pageIdx = 0){
+  S.viewerList = list;
+  S.viewerIdx = idx;
+  S.viewerPageIdx = pageIdx;
+  if(S.isAnnotating) toggleAnnotate();
+  if(S.isStageMode) toggleStageMode();
   renderViewer();
   $('viewerBackdrop').classList.add('open');
-  document.body.style.overflow='hidden';
+  document.body.style.overflow = 'hidden';
 }
-function closeViewer(){ $('viewerBackdrop').classList.remove('open'); document.body.style.overflow=''; }
+
+function closeViewer(){
+  saveAnnotation();
+  if(S.isAnnotating) toggleAnnotate();
+  if(S.isStageMode) toggleStageMode();
+  $('filterDropdown').classList.remove('open');
+  $('viewerBackdrop').classList.remove('open');
+  document.body.style.overflow = '';
+}
 
 function renderViewer(){
-  const score=S.viewerList[S.viewerIdx]; if(!score) return;
-  const cat=S.categories.find(c=>c.id===score.categoryId);
-  $('viewerImg').src=score.dataURL;
-  $('viewerTitle').textContent=score.title;
-  $('viewerCat').textContent=cat?`${cat.emoji||''} ${cat.name}`:'未分类';
-  $('viewerComposer').textContent=score.composer?`🎼 ${score.composer}`:'';
-  $('viewerDiff').textContent=score.difficulty?DIFF_LABELS[score.difficulty]||'':'';
-  $('viewerCounter').textContent=`${S.viewerIdx+1} / ${S.viewerList.length}`;
-  const isFav=score.favorite;
-  const vFav=$('viewerFav');
-  vFav.classList.toggle('is-fav',isFav);
-  vFav.querySelector('svg path').setAttribute('fill',isFav?'#fbbf24':'none');
-  vFav.querySelector('svg path').setAttribute('stroke',isFav?'#fbbf24':'currentColor');
-  $('viewerTags').innerHTML=(score.tags||[]).map(t=>`<span class="tag">${esc(t)}</span>`).join('');
-  $('viewerPrev').style.display=S.viewerIdx>0?'':'none';
-  $('viewerNext').style.display=S.viewerIdx<S.viewerList.length-1?'':'none';
+  const score = S.viewerList[S.viewerIdx];
+  if(!score) return;
+  const cat = S.categories.find(c=>c.id===score.categoryId);
+  const pages = (score.pages && score.pages.length) ? score.pages : [score.dataURL];
+
+  if(S.viewerPageIdx >= pages.length) S.viewerPageIdx = pages.length - 1;
+  if(S.viewerPageIdx < 0) S.viewerPageIdx = 0;
+
+  $('viewerTitle').textContent = score.title;
+  $('viewerCat').textContent = cat ? `${cat.emoji||''} ${cat.name}` : '未分类';
+  $('viewerComposer').textContent = score.composer ? `🎼 ${score.composer}` : '';
+  $('viewerDiff').textContent = score.difficulty ? (DIFF_LABELS[score.difficulty]||'') : '';
+
+  if(pages.length > 1){
+    $('viewerPagePill').style.display = 'flex';
+    $('viewerPageTag').style.display = 'inline-block';
+    $('viewerPageTag').textContent = `${S.viewerPageIdx+1}/${pages.length}`;
+    $('pagePillText').textContent = `第 ${S.viewerPageIdx+1} / ${pages.length} 页`;
+    $('pagePillPrev').disabled = (S.viewerPageIdx === 0 && S.viewerIdx === 0);
+    $('pagePillNext').disabled = (S.viewerPageIdx === pages.length - 1 && S.viewerIdx === S.viewerList.length - 1);
+  } else {
+    $('viewerPagePill').style.display = 'none';
+    $('viewerPageTag').style.display = 'none';
+  }
+
+  $('viewerCounter').textContent = `曲目 ${S.viewerIdx+1} / ${S.viewerList.length}`;
+
+  const isFav = score.favorite;
+  const vFav = $('viewerFav');
+  vFav.classList.toggle('is-fav', isFav);
+  vFav.querySelector('svg path').setAttribute('fill', isFav ? '#fbbf24' : 'none');
+  vFav.querySelector('svg path').setAttribute('stroke', isFav ? '#fbbf24' : 'currentColor');
+
+  $('viewerTags').innerHTML = (score.tags||[]).map(t=>`<span class="tag">${esc(t)}</span>`).join('');
+  $('viewerPrev').style.display = S.viewerIdx > 0 ? '' : 'none';
+  $('viewerNext').style.display = S.viewerIdx < S.viewerList.length - 1 ? '' : 'none';
+
+  setViewerFilter(score.filterMode || 'normal', false);
+  resetZoom();
+
+  const img = $('viewerImg');
+  const targetSrc = pages[S.viewerPageIdx];
+  if(img.src !== targetSrc){
+    img.src = targetSrc;
+  } else {
+    setupAnnotationCanvas();
+  }
 }
 
-function viewerNav(dir){
-  const newIdx=S.viewerIdx+dir;
-  if(newIdx<0||newIdx>=S.viewerList.length) return;
-  S.viewerIdx=newIdx;
-  const img=$('viewerImg');
-  img.style.opacity='0'; img.style.transform=`translateX(${dir>0?'40px':'-40px'})`;
-  setTimeout(()=>{ renderViewer(); img.style.transition='opacity .18s,transform .18s'; img.style.opacity='1'; img.style.transform='translateX(0)'; setTimeout(()=>img.style.transition='',200); },80);
+function setupAnnotationCanvas(){
+  const img = $('viewerImg');
+  const cvs = $('annotationCanvas');
+  if(!cvs || !img.naturalWidth || !img.naturalHeight) return;
+  cvs.width = img.naturalWidth;
+  cvs.height = img.naturalHeight;
+  const ctx = cvs.getContext('2d');
+  ctx.clearRect(0, 0, cvs.width, cvs.height);
+  S.annotHistory = [];
+
+  const score = S.viewerList[S.viewerIdx];
+  if(score && score.annotations && score.annotations[S.viewerPageIdx]){
+    const annotImg = new Image();
+    annotImg.onload = () => {
+      ctx.drawImage(annotImg, 0, 0);
+      S.annotHistory.push(cvs.toDataURL('image/png'));
+    };
+    annotImg.src = score.annotations[S.viewerPageIdx];
+  } else {
+    S.annotHistory.push(cvs.toDataURL('image/png'));
+  }
+}
+
+function viewerTurnPage(dir){
+  saveAnnotation();
+  const score = S.viewerList[S.viewerIdx];
+  if(!score) return;
+  const pages = (score.pages && score.pages.length) ? score.pages : [score.dataURL];
+  const nextPg = S.viewerPageIdx + dir;
+
+  if(nextPg >= 0 && nextPg < pages.length){
+    S.viewerPageIdx = nextPg;
+    renderViewer();
+  } else if(nextPg < 0 && S.viewerIdx > 0){
+    S.viewerIdx--;
+    const prevScore = S.viewerList[S.viewerIdx];
+    const prevPages = (prevScore.pages && prevScore.pages.length) ? prevScore.pages : [prevScore.dataURL];
+    S.viewerPageIdx = prevPages.length - 1;
+    renderViewer();
+    toast(`已切换至曲谱：《${prevScore.title}》`);
+  } else if(nextPg >= pages.length && S.viewerIdx < S.viewerList.length - 1){
+    S.viewerIdx++;
+    S.viewerPageIdx = 0;
+    const nextScore = S.viewerList[S.viewerIdx];
+    renderViewer();
+    toast(`已切换至曲谱：《${nextScore.title}》`);
+  }
+}
+
+function viewerNavScore(dir){
+  saveAnnotation();
+  const newIdx = S.viewerIdx + dir;
+  if(newIdx < 0 || newIdx >= S.viewerList.length) return;
+  S.viewerIdx = newIdx;
+  S.viewerPageIdx = 0;
+  const img = $('viewerImg');
+  img.style.opacity = '0';
+  img.style.transform = `translateX(${dir > 0 ? '40px' : '-40px'})`;
+  setTimeout(() => {
+    renderViewer();
+    img.style.transition = 'opacity .18s,transform .18s';
+    img.style.opacity = '1';
+    img.style.transform = 'translateX(0)';
+    setTimeout(() => img.style.transition = '', 200);
+  }, 80);
+}
+
+// ─────────────────────────────────────────
+// Zoom & Pan
+// ─────────────────────────────────────────
+function updateTransform(){
+  const layer = $('viewerStageLayer');
+  if(!layer) return;
+  layer.style.transform = `translate(${S.panX}px, ${S.panY}px) scale(${S.zoomScale})`;
+  $('zoomResetBtn').textContent = `${Math.round(S.zoomScale * 100)}%`;
+}
+
+function resetZoom(){
+  S.zoomScale = 1.0;
+  S.panX = 0;
+  S.panY = 0;
+  updateTransform();
+}
+
+function setZoom(newScale, focalX, focalY){
+  const oldScale = S.zoomScale;
+  const clampedScale = Math.min(Math.max(newScale, 0.5), 4.0);
+  if(clampedScale === oldScale) return;
+
+  if(focalX != null && focalY != null){
+    const ratio = clampedScale / oldScale;
+    S.panX = focalX - (focalX - S.panX) * ratio;
+    S.panY = focalY - (focalY - S.panY) * ratio;
+  }
+  S.zoomScale = clampedScale;
+  if(S.zoomScale <= 1.0){
+    S.panX = 0;
+    S.panY = 0;
+  }
+  updateTransform();
+}
+
+function fitZoom(){
+  const vp = $('viewerViewport');
+  const img = $('viewerImg');
+  if(!vp || !img.naturalWidth){ resetZoom(); return; }
+  const vw = vp.clientWidth - 32;
+  const vh = vp.clientHeight - 32;
+  const iw = img.naturalWidth;
+  const ih = img.naturalHeight;
+  const scale = Math.min(vw / iw, vh / ih, 1.0);
+  S.zoomScale = Math.max(scale, 0.5);
+  S.panX = 0;
+  S.panY = 0;
+  updateTransform();
+}
+
+// ─────────────────────────────────────────
+// Visual Filters
+// ─────────────────────────────────────────
+function setViewerFilter(mode, save = true){
+  S.filterMode = mode;
+  const layer = $('viewerStageLayer');
+  if(!layer) return;
+  layer.classList.remove('viewer-filter-normal', 'viewer-filter-sepia', 'viewer-filter-invert', 'viewer-filter-contrast');
+  layer.classList.add(`viewer-filter-${mode}`);
+
+  document.querySelectorAll('.filter-opt').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.filter === mode);
+  });
+
+  if(save){
+    const score = S.viewerList[S.viewerIdx];
+    if(score){
+      score.filterMode = mode;
+      dbPut('scores', score);
+    }
+    toast(`已切换至：${FILTER_NAMES[mode] || mode}`);
+  }
+}
+
+function toggleFilterDropdown(){
+  $('filterDropdown').classList.toggle('open');
+}
+
+// ─────────────────────────────────────────
+// Drawing & Annotations
+// ─────────────────────────────────────────
+let isDrawing = false;
+let lastDrawX = 0, lastDrawY = 0;
+
+function toggleAnnotate(){
+  S.isAnnotating = !S.isAnnotating;
+  $('viewerAnnotBtn').classList.toggle('active', S.isAnnotating);
+  $('annotToolbar').style.display = S.isAnnotating ? 'flex' : 'none';
+  $('viewerStageLayer').classList.toggle('is-annotating', S.isAnnotating);
+  if(!S.isAnnotating){
+    saveAnnotation();
+  } else {
+    resetZoom();
+  }
+}
+
+function getCanvasPos(e){
+  const cvs = $('annotationCanvas');
+  const rect = cvs.getBoundingClientRect();
+  const clientX = e.clientX ?? (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+  const clientY = e.clientY ?? (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
+  return {
+    x: (clientX - rect.left) * (cvs.width / rect.width),
+    y: (clientY - rect.top) * (cvs.height / rect.height)
+  };
+}
+
+function startDraw(e){
+  if(!S.isAnnotating) return;
+  isDrawing = true;
+  const pos = getCanvasPos(e);
+  lastDrawX = pos.x;
+  lastDrawY = pos.y;
+}
+
+function drawMove(e){
+  if(!isDrawing || !S.isAnnotating) return;
+  const cvs = $('annotationCanvas');
+  const ctx = cvs.getContext('2d');
+  const pos = getCanvasPos(e);
+  const baseScale = Math.max(cvs.width, cvs.height) / 1200;
+
+  if(S.annotTool === 'pen'){
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.strokeStyle = S.annotColor;
+    ctx.lineWidth = Math.max(2, 3.5 * baseScale);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(lastDrawX, lastDrawY);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+  } else if(S.annotTool === 'highlighter'){
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.strokeStyle = hexToRgba(S.annotColor, 0.35);
+    ctx.lineWidth = Math.max(14, 24 * baseScale);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(lastDrawX, lastDrawY);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+  } else if(S.annotTool === 'eraser'){
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.lineWidth = Math.max(18, 30 * baseScale);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(lastDrawX, lastDrawY);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.stroke();
+  }
+  lastDrawX = pos.x;
+  lastDrawY = pos.y;
+}
+
+function endDraw(){
+  if(!isDrawing) return;
+  isDrawing = false;
+  const cvs = $('annotationCanvas');
+  if(S.annotHistory.length > 20) S.annotHistory.shift();
+  S.annotHistory.push(cvs.toDataURL('image/png'));
+  saveAnnotation();
+}
+
+function saveAnnotation(){
+  const cvs = $('annotationCanvas');
+  const score = S.viewerList[S.viewerIdx];
+  if(!score || !cvs || !cvs.width || !cvs.height) return;
+  score.annotations = score.annotations || {};
+  score.annotations[S.viewerPageIdx] = cvs.toDataURL('image/png');
+  dbPut('scores', score);
+}
+
+function undoAnnot(){
+  if(S.annotHistory.length <= 1) return;
+  S.annotHistory.pop();
+  const prevData = S.annotHistory[S.annotHistory.length - 1];
+  const cvs = $('annotationCanvas');
+  const ctx = cvs.getContext('2d');
+  ctx.clearRect(0, 0, cvs.width, cvs.height);
+  if(prevData){
+    const img = new Image();
+    img.onload = () => ctx.drawImage(img, 0, 0);
+    img.src = prevData;
+  }
+  saveAnnotation();
+}
+
+function clearAnnot(){
+  const cvs = $('annotationCanvas');
+  const ctx = cvs.getContext('2d');
+  ctx.clearRect(0, 0, cvs.width, cvs.height);
+  S.annotHistory.push(cvs.toDataURL('image/png'));
+  saveAnnotation();
+  toast('已清空当前页标注');
+}
+
+// ─────────────────────────────────────────
+// Stage Mode & WakeLock
+// ─────────────────────────────────────────
+function toggleStageMode(){
+  S.isStageMode = !S.isStageMode;
+  const vb = $('viewerBackdrop');
+  vb.classList.toggle('stage-mode', S.isStageMode);
+  $('viewerStageBtn').classList.toggle('active', S.isStageMode);
+
+  if(S.isStageMode){
+    if(document.documentElement.requestFullscreen){
+      document.documentElement.requestFullscreen().catch(() => {});
+    }
+    if('wakeLock' in navigator){
+      navigator.wakeLock.request('screen').then(lock => {
+        S.wakeLock = lock;
+      }).catch(() => {});
+    }
+    const hint = $('stageModeHint');
+    hint.classList.add('active');
+    setTimeout(() => hint.classList.remove('active'), 3200);
+  } else {
+    if(document.fullscreenElement && document.exitFullscreen){
+      document.exitFullscreen().catch(() => {});
+    }
+    if(S.wakeLock){
+      S.wakeLock.release().catch(() => {});
+      S.wakeLock = null;
+    }
+  }
 }
 
 async function toggleFav(id){
-  const s=S.scores.find(x=>x.id===id); if(!s) return;
-  s.favorite=!s.favorite; await dbPut('scores',s);
+  const s = S.scores.find(x => x.id === id);
+  if(!s) return;
+  s.favorite = !s.favorite;
+  await dbPut('scores', s);
   renderAll();
   if($('viewerBackdrop').classList.contains('open')) renderViewer();
-  toast(s.favorite?'已收藏 ❤️':'已取消收藏');
+  toast(s.favorite ? '已收藏 ❤️' : '已取消收藏');
 }
 
 async function deleteScore(id){
   if(!confirm('确定删除这张乐谱？此操作不可恢复。')) return;
-  await dbDel('scores',id); S.scores=S.scores.filter(s=>s.id!==id);
-  closeViewer(); renderAll(); toast('已删除');
+  await dbDel('scores', id);
+  S.scores = S.scores.filter(s => s.id !== id);
+  closeViewer();
+  renderAll();
+  toast('已删除');
 }
 
 function downloadScore(score){
-  const a=document.createElement('a');
-  a.href=score.dataURL;
-  a.download=score.title+'.'+(score.fileType||'image/jpeg').split('/')[1];
+  const pages = (score.pages && score.pages.length) ? score.pages : [score.dataURL];
+  const currentImgUrl = pages[S.viewerPageIdx] || score.dataURL;
+  const a = document.createElement('a');
+  a.href = currentImgUrl;
+  const pageSuffix = pages.length > 1 ? `_第${S.viewerPageIdx+1}页` : '';
+  a.download = `${score.title}${pageSuffix}.${(score.fileType || 'image/jpeg').split('/')[1] || 'jpg'}`;
   a.click();
 }
 
@@ -637,28 +1058,212 @@ document.addEventListener('drop',e=>{
 });
 
 // ─────────────────────────────────────────
-// Keyboard
+// Gestures & Canvas Interaction
 // ─────────────────────────────────────────
-document.addEventListener('keydown',e=>{
+let isPanning = false;
+let panStartX = 0, panStartY = 0;
+let initialPinchDist = 0;
+let initialPinchScale = 1.0;
+let touchStartX = 0, touchStartY = 0, touchStartTime = 0;
+let lastTapTime = 0;
+
+function setupViewportGestures(){
+  const vp = $('viewerViewport');
+  const layer = $('viewerStageLayer');
+  if(!vp || !layer) return;
+
+  // Mouse Wheel Zoom
+  vp.addEventListener('wheel', e => {
+    e.preventDefault();
+    const rect = vp.getBoundingClientRect();
+    const focalX = e.clientX - rect.left - rect.width / 2;
+    const focalY = e.clientY - rect.top - rect.height / 2;
+    const factor = e.deltaY < 0 ? 1.15 : 0.87;
+    setZoom(S.zoomScale * factor, focalX, focalY);
+  }, { passive: false });
+
+  // Mouse Drag to Pan
+  layer.addEventListener('mousedown', e => {
+    if(S.isAnnotating) return;
+    if(e.button !== 0) return;
+    isPanning = true;
+    panStartX = e.clientX - S.panX;
+    panStartY = e.clientY - S.panY;
+    layer.classList.add('is-dragging');
+  });
+
+  window.addEventListener('mousemove', e => {
+    if(!isPanning || S.isAnnotating) return;
+    S.panX = e.clientX - panStartX;
+    S.panY = e.clientY - panStartY;
+    updateTransform();
+  });
+
+  window.addEventListener('mouseup', () => {
+    if(isPanning){
+      isPanning = false;
+      layer.classList.remove('is-dragging');
+    }
+  });
+
+  // Double Click / Double Tap to Toggle Zoom
+  layer.addEventListener('dblclick', e => {
+    if(S.isAnnotating) return;
+    const rect = vp.getBoundingClientRect();
+    const focalX = e.clientX - rect.left - rect.width / 2;
+    const focalY = e.clientY - rect.top - rect.height / 2;
+    if(S.zoomScale > 1.1){
+      resetZoom();
+    } else {
+      setZoom(2.2, focalX, focalY);
+    }
+  });
+
+  // Touch Handling: Pinch-to-zoom + Swipe to Turn Page + Pan
+  vp.addEventListener('touchstart', e => {
+    if(S.isAnnotating) return;
+    if(e.touches.length === 2){
+      isPanning = false;
+      initialPinchDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      initialPinchScale = S.zoomScale;
+    } else if(e.touches.length === 1){
+      const now = Date.now();
+      if(now - lastTapTime < 320){
+        // Double tap!
+        const rect = vp.getBoundingClientRect();
+        const focalX = e.touches[0].clientX - rect.left - rect.width / 2;
+        const focalY = e.touches[0].clientY - rect.top - rect.height / 2;
+        if(S.zoomScale > 1.1) resetZoom();
+        else setZoom(2.2, focalX, focalY);
+        lastTapTime = 0;
+        return;
+      }
+      lastTapTime = now;
+
+      isPanning = true;
+      panStartX = e.touches[0].clientX - S.panX;
+      panStartY = e.touches[0].clientY - S.panY;
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+      touchStartTime = now;
+      layer.classList.add('is-dragging');
+    }
+  }, { passive: true });
+
+  vp.addEventListener('touchmove', e => {
+    if(S.isAnnotating) return;
+    if(e.touches.length === 2){
+      e.preventDefault();
+      const currentDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      if(initialPinchDist > 0){
+        const factor = currentDist / initialPinchDist;
+        const rect = vp.getBoundingClientRect();
+        const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left - rect.width / 2;
+        const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2 - rect.top - rect.height / 2;
+        setZoom(initialPinchScale * factor, midX, midY);
+      }
+    } else if(e.touches.length === 1 && isPanning){
+      if(S.zoomScale > 1.05){
+        e.preventDefault();
+        S.panX = e.touches[0].clientX - panStartX;
+        S.panY = e.touches[0].clientY - panStartY;
+        updateTransform();
+      }
+    }
+  }, { passive: false });
+
+  vp.addEventListener('touchend', e => {
+    if(S.isAnnotating) return;
+    if(e.touches.length < 2) initialPinchDist = 0;
+    if(e.touches.length === 0){
+      isPanning = false;
+      layer.classList.remove('is-dragging');
+
+      // Detect horizontal swipe to turn page when scale is normal
+      if(S.zoomScale <= 1.05 && e.changedTouches.length === 1){
+        const deltaX = e.changedTouches[0].clientX - touchStartX;
+        const deltaY = e.changedTouches[0].clientY - touchStartY;
+        const dt = Date.now() - touchStartTime;
+        if(Math.abs(deltaX) > 50 && Math.abs(deltaY) < 60 && dt < 400){
+          viewerTurnPage(deltaX < 0 ? 1 : -1);
+        }
+      }
+    }
+  }, { passive: true });
+
+  // Canvas Drawing Pointer Events
+  const cvs = $('annotationCanvas');
+  if(cvs){
+    cvs.addEventListener('pointerdown', e => {
+      if(!S.isAnnotating) return;
+      cvs.setPointerCapture(e.pointerId);
+      startDraw(e);
+    });
+    cvs.addEventListener('pointermove', e => {
+      if(!S.isAnnotating) return;
+      drawMove(e);
+    });
+    cvs.addEventListener('pointerup', e => {
+      if(!S.isAnnotating) return;
+      cvs.releasePointerCapture(e.pointerId);
+      endDraw();
+    });
+    cvs.addEventListener('pointercancel', () => {
+      if(!S.isAnnotating) return;
+      endDraw();
+    });
+  }
+
+  // Image load event to configure annotation canvas dimensions
+  $('viewerImg').addEventListener('load', () => {
+    setupAnnotationCanvas();
+  });
+}
+
+// ─────────────────────────────────────────
+// Keyboard & Pedals
+// ─────────────────────────────────────────
+document.addEventListener('keydown', e => {
   if(['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
   if($('viewerBackdrop').classList.contains('open')){
-    if(e.key==='ArrowLeft') viewerNav(-1);
-    if(e.key==='ArrowRight') viewerNav(1);
-    if(e.key==='Escape') closeViewer();
-  } else if(e.key==='Escape'){
+    if(e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ' || e.key === 'Enter'){
+      e.preventDefault();
+      viewerTurnPage(1);
+    } else if(e.key === 'ArrowLeft' || e.key === 'PageUp' || e.key === 'Backspace'){
+      e.preventDefault();
+      viewerTurnPage(-1);
+    } else if(e.key === '+' || e.key === '='){
+      e.preventDefault();
+      setZoom(S.zoomScale + 0.25);
+    } else if(e.key === '-'){
+      e.preventDefault();
+      setZoom(S.zoomScale - 0.25);
+    } else if(e.key === '0'){
+      e.preventDefault();
+      resetZoom();
+    } else if(e.key === 'Escape'){
+      if($('filterDropdown').classList.contains('open')){
+        $('filterDropdown').classList.remove('open');
+      } else if(S.isAnnotating){
+        toggleAnnotate();
+      } else if(S.isStageMode){
+        toggleStageMode();
+      } else {
+        closeViewer();
+      }
+    }
+  } else if(e.key === 'Escape'){
     if($('uploadModalBackdrop').classList.contains('open')) closeUploadModal();
     if($('categoryModalBackdrop').classList.contains('open')) closeCatModal();
     if($('editModalBackdrop').classList.contains('open')) closeEditModal();
     if($('settingsPanel').classList.contains('open')) closeSettings();
   }
-});
-
-// Touch swipe in viewer
-let txStart=0;
-$('viewerBackdrop').addEventListener('touchstart',e=>{ txStart=e.touches[0].clientX; },{passive:true});
-$('viewerBackdrop').addEventListener('touchend',e=>{
-  const dx=e.changedTouches[0].clientX-txStart;
-  if(Math.abs(dx)>60) viewerNav(dx<0?1:-1);
 });
 
 // ─────────────────────────────────────────
@@ -720,14 +1325,71 @@ function bindEvents(){
     b.addEventListener('click',()=>{ S.selEmoji=b.dataset.emoji; document.querySelectorAll('.emoji-btn').forEach(x=>x.classList.remove('active')); b.classList.add('active'); });
   });
 
-  // Viewer
+  // Viewer Actions
   $('viewerClose').addEventListener('click',closeViewer);
-  $('viewerPrev').addEventListener('click',()=>viewerNav(-1));
-  $('viewerNext').addEventListener('click',()=>viewerNav(1));
+  $('viewerPrev').addEventListener('click',()=>viewerNavScore(-1));
+  $('viewerNext').addEventListener('click',()=>viewerNavScore(1));
+  $('pagePillPrev').addEventListener('click',()=>viewerTurnPage(-1));
+  $('pagePillNext').addEventListener('click',()=>viewerTurnPage(1));
   $('viewerFav').addEventListener('click',()=>{ const s=S.viewerList[S.viewerIdx]; if(s) toggleFav(s.id); });
   $('viewerEdit').addEventListener('click',()=>{ const s=S.viewerList[S.viewerIdx]; if(s) openEditModal(s.id); });
   $('viewerDownload').addEventListener('click',()=>{ const s=S.viewerList[S.viewerIdx]; if(s) downloadScore(s); });
   $('viewerDelete').addEventListener('click',()=>{ const s=S.viewerList[S.viewerIdx]; if(s) deleteScore(s.id); });
+
+  // Zoom Bar
+  $('zoomInBtn').addEventListener('click',()=>setZoom(S.zoomScale+0.25));
+  $('zoomOutBtn').addEventListener('click',()=>setZoom(S.zoomScale-0.25));
+  $('zoomResetBtn').addEventListener('click',resetZoom);
+  $('zoomFitBtn').addEventListener('click',fitZoom);
+
+  // Filters
+  $('viewerFilterBtn').addEventListener('click',e=>{
+    e.stopPropagation();
+    toggleFilterDropdown();
+  });
+  document.querySelectorAll('.filter-opt').forEach(btn=>{
+    btn.addEventListener('click',e=>{
+      e.stopPropagation();
+      setViewerFilter(btn.dataset.filter, true);
+      $('filterDropdown').classList.remove('open');
+    });
+  });
+  document.addEventListener('click', e => {
+    if($('filterDropdown').classList.contains('open') && !$('filterDropdown').contains(e.target) && e.target !== $('viewerFilterBtn') && !$('viewerFilterBtn').contains(e.target)){
+      $('filterDropdown').classList.remove('open');
+    }
+  });
+
+  // Annotations
+  $('viewerAnnotBtn').addEventListener('click',toggleAnnotate);
+  document.querySelectorAll('.annot-tool-btn').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      document.querySelectorAll('.annot-tool-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      S.annotTool = btn.dataset.tool;
+    });
+  });
+  document.querySelectorAll('.annot-color-dot').forEach(dot=>{
+    dot.addEventListener('click',()=>{
+      document.querySelectorAll('.annot-color-dot').forEach(d=>d.classList.remove('active'));
+      dot.classList.add('active');
+      S.annotColor = dot.dataset.color;
+    });
+  });
+  $('annotUndoBtn').addEventListener('click',undoAnnot);
+  $('annotClearBtn').addEventListener('click',clearAnnot);
+  $('annotDoneBtn').addEventListener('click',toggleAnnotate);
+
+  // Stage Mode & Tap Zones
+  $('viewerStageBtn').addEventListener('click',toggleStageMode);
+  $('viewerZoneLeft').addEventListener('click',()=>viewerTurnPage(-1));
+  $('viewerZoneRight').addEventListener('click',()=>viewerTurnPage(1));
+  $('viewerZoneCenter').addEventListener('click',()=>{
+    $('viewerBackdrop').classList.toggle('show-controls');
+  });
+
+  // Setup Viewport Gestures
+  setupViewportGestures();
 
   // Edit modal
   $('editModalClose').addEventListener('click',closeEditModal);
@@ -797,7 +1459,9 @@ function bindEvents(){
   $('uploadModalBackdrop').addEventListener('click',e=>{ if(e.target===$('uploadModalBackdrop')) closeUploadModal(); });
   $('categoryModalBackdrop').addEventListener('click',e=>{ if(e.target===$('categoryModalBackdrop')) closeCatModal(); });
   $('editModalBackdrop').addEventListener('click',e=>{ if(e.target===$('editModalBackdrop')) closeEditModal(); });
-  $('viewerBackdrop').addEventListener('click',e=>{ if(e.target===$('viewerBackdrop')) closeViewer(); });
+  $('viewerBackdrop').addEventListener('click',e=>{
+    if(e.target===$('viewerBackdrop')) closeViewer();
+  });
 }
 
 // ─────────────────────────────────────────
