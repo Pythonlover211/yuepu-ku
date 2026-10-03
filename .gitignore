@@ -1,4 +1,14 @@
-*.png
-*.jpg
+# Root screenshot and temp test files
+/android_*.png
 temp*
+*.idsig
 
+# Android build outputs & secret keys
+android/bin/
+android/obj/
+android/assets/
+*.keystore
+
+# Operating system files
+.DS_Store
+Thumbs.db
