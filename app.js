@@ -47,6 +47,9 @@ const S = {
   selColor: '#a78bfa', selEmoji: '🎵', selDiff: 0,
   editCatId: null, editScoreId: null,
   pendingFiles: [],
+  expandedFolders: new Set(),
+  folderModalScoreId: null,
+  uploadMode: 'new',
 };
 
 const DIFF_LABELS = ['','★ 入门','★★ 初级','★★★ 中级','★★★★ 高级','★★★★★ 专业'];
@@ -233,6 +236,7 @@ function renderAll(){
   updateBadges();
   renderCategories();
   updateCatSelects();
+  updateAppendTargetSelect();
   renderPageTitle();
   renderScores();
   updateStorage();
@@ -321,13 +325,53 @@ function renderScores(){
   list.forEach((score,idx)=>{
     const cat=S.categories.find(c=>c.id===score.categoryId);
     const card=document.createElement('div');
-    card.className='score-card'; card.dataset.id=score.id;
-    const pagesCount = (score.pages && score.pages.length) ? score.pages.length : 1;
-    const pageBadge = pagesCount > 1 ? `<div class="card-pages-badge">📄 ${pagesCount}页</div>` : '';
-    const pageTagHtml = pagesCount > 1 ? `<span class="tag" style="background:rgba(167,139,250,.18);color:var(--primary);font-weight:600">📄 ${pagesCount}页</span>` : '';
+    const pages = (score.pages && score.pages.length) ? score.pages : [score.dataURL];
+    const pagesCount = pages.length;
+    const isFolder = pagesCount > 1;
+    const isExpanded = S.expandedFolders.has(score.id);
+
+    card.className='score-card' + (isFolder ? ' is-folder' : '');
+    card.dataset.id=score.id;
+
+    const pageBadge = isFolder
+      ? `<div class="card-pages-badge is-folder">📁 乐谱夹 · ${pagesCount}页</div>`
+      : '';
+    const pageTagHtml = isFolder
+      ? `<span class="tag" style="background:rgba(167,139,250,.22);color:var(--primary);font-weight:600">📁 ${pagesCount}页</span>`
+      : '';
     const tagsHtml=(score.tags||[]).slice(0,3).map(t=>`<span class="tag">${esc(t)}</span>`).join('');
     const diffHtml=score.difficulty?`<div class="diff-badge">${DIFF_LABELS[score.difficulty]||''}</div>`:'';
     const isFav=score.favorite;
+
+    let folderBarHtml = '';
+    let folderExpandedHtml = '';
+    if(isFolder){
+      folderBarHtml = `
+        <div class="card-folder-bar">
+          <button class="folder-toggle-btn${isExpanded ? ' is-expanded' : ''}" data-act="toggle-folder" title="${isExpanded ? '折叠各页' : '展开各页预览'}">
+            <span>${isExpanded ? '📁 折叠' : '📂 展开'} (${pagesCount}页)</span>
+            <span class="folder-chevron">▼</span>
+          </button>
+          <button class="folder-manage-btn" data-act="manage-folder" title="管理此乐谱夹 (页面排序/增减)">⚙️</button>
+        </div>`;
+      if(isExpanded){
+        const miniPagesHtml = pages.map((pUrl, pIdx) => `
+          <div class="card-mini-page" data-act="jump-page" data-page="${pIdx}" title="点击看第 ${pIdx+1} 页">
+            <img src="${pUrl}" alt="第 ${pIdx+1} 页" loading="lazy" />
+            <span class="mini-page-num">${pIdx+1}</span>
+          </div>`).join('');
+        folderExpandedHtml = `
+          <div class="card-folder-expanded">
+            <div class="card-folder-pages-strip">
+              ${miniPagesHtml}
+              <button class="card-mini-page-add" data-act="append-page" title="追加图片到此乐谱夹">
+                <span>➕</span>
+                <span>加页</span>
+              </button>
+            </div>
+          </div>`;
+      }
+    }
 
     if(S.viewMode==='grid'){
       card.innerHTML=`
@@ -348,6 +392,8 @@ function renderScores(){
           ${score.composer?`<div class="card-composer">🎼 ${esc(score.composer)}</div>`:''}
           <div class="card-tags">${pageTagHtml}${tagsHtml}</div>
           ${diffHtml}
+          ${folderBarHtml}
+          ${folderExpandedHtml}
         </div>`;
     } else {
       card.innerHTML=`
@@ -363,10 +409,47 @@ function renderScores(){
             <div class="card-tags">${pageTagHtml}${tagsHtml}${diffHtml}</div>
           </div>
           <span class="card-date">${fmtDate(score.createdAt)}</span>
+          ${isFolder ? `<button class="folder-manage-btn" data-act="manage-folder" title="管理此乐谱夹" style="margin-left:8px">📁</button>` : ''}
         </div>`;
     }
+
     card.querySelector('.fav-btn')?.addEventListener('click',e=>{ e.stopPropagation(); toggleFav(score.id); });
-    card.addEventListener('click',()=>openViewer(idx,list));
+
+    card.querySelectorAll('[data-act="toggle-folder"]').forEach(btn=>{
+      btn.addEventListener('click', e=>{
+        e.stopPropagation();
+        if(S.expandedFolders.has(score.id)){
+          S.expandedFolders.delete(score.id);
+        } else {
+          S.expandedFolders.add(score.id);
+        }
+        renderScores();
+      });
+    });
+
+    card.querySelectorAll('[data-act="manage-folder"]').forEach(btn=>{
+      btn.addEventListener('click', e=>{
+        e.stopPropagation();
+        openFolderModal(score.id);
+      });
+    });
+
+    card.querySelectorAll('[data-act="jump-page"]').forEach(el=>{
+      el.addEventListener('click', e=>{
+        e.stopPropagation();
+        const pIdx = parseInt(el.dataset.page) || 0;
+        openViewer(idx, list, pIdx);
+      });
+    });
+
+    card.querySelectorAll('[data-act="append-page"]').forEach(btn=>{
+      btn.addEventListener('click', e=>{
+        e.stopPropagation();
+        promptAppendScore(score.id);
+      });
+    });
+
+    card.addEventListener('click',()=>openViewer(idx,list,0));
     grid.appendChild(card);
   });
 }
@@ -378,13 +461,38 @@ function updateStorage(){
 }
 
 // ─────────────────────────────────────────
-// Upload
+// Upload & Folder Append
 // ─────────────────────────────────────────
+function setUploadMode(mode){
+  S.uploadMode = mode;
+  const isAppend = mode === 'append';
+  $('uploadModeNew')?.classList.toggle('active', !isAppend);
+  $('uploadModeAppend')?.classList.toggle('active', isAppend);
+  if($('appendTargetGroup')) $('appendTargetGroup').style.display = isAppend ? 'block' : 'none';
+  if($('newScoreFields')) $('newScoreFields').style.display = isAppend ? 'none' : 'block';
+  if(isAppend) updateAppendTargetSelect();
+}
+
+function updateAppendTargetSelect(){
+  const sel = $('appendTargetSelect');
+  if(!sel) return;
+  if(!S.scores.length){
+    sel.innerHTML = '<option value="">(暂无乐谱，请先新建乐谱)</option>';
+    return;
+  }
+  sel.innerHTML = S.scores.map(s => {
+    const pCount = (s.pages && s.pages.length) ? s.pages.length : 1;
+    const prefix = pCount > 1 ? `📁 [乐谱夹 · ${pCount}页]` : `📄 [单页]`;
+    return `<option value="${s.id}">${prefix} ${esc(s.title)}</option>`;
+  }).join('');
+}
+
 function openUploadModal(){
   S.pendingFiles=[];
   $('uploadPreviewList').innerHTML='';
   $('uploadForm').style.display='none';
   $('uploadModalFooter').style.display='none';
+  setUploadMode('new');
   if($('mergePagesGroup')) $('mergePagesGroup').style.display='none';
   if($('mergePagesCheck')) $('mergePagesCheck').checked=true;
   $('uploadTitle').value=''; $('uploadComposer').value='';
@@ -392,6 +500,7 @@ function openUploadModal(){
   $('uploadCategory').value=''; S.selDiff=0;
   setDiffActive($('difficultyGroup'), 0);
   renderTagSuggestions();
+  updateAppendTargetSelect();
   $('uploadModalBackdrop').classList.add('open');
 }
 function closeUploadModal(){ $('uploadModalBackdrop').classList.remove('open'); S.pendingFiles=[]; }
@@ -423,6 +532,14 @@ async function handleFiles(files){
     $('uploadTitle').value=S.pendingFiles[0].name.replace(/\.[^.]+$/,'');
 }
 
+function movePendingFile(idx, dir){
+  const target = idx + dir;
+  if(target < 0 || target >= S.pendingFiles.length) return;
+  const item = S.pendingFiles.splice(idx, 1)[0];
+  S.pendingFiles.splice(target, 0, item);
+  renderUploadPreviews();
+}
+
 function renderUploadPreviews(){
   const list=$('uploadPreviewList'); list.innerHTML='';
   S.pendingFiles.forEach((file, fIdx)=>{
@@ -434,9 +551,20 @@ function renderUploadPreviews(){
         <div class="upload-preview-name">${esc(file.name)}</div>
         <div class="upload-preview-size">${fmtSize(file.size)} · 第 ${fIdx+1} 页</div>
       </div>
-      <button class="upload-preview-remove" title="移除">
+      <div class="upload-preview-actions">
+        <button type="button" class="upload-preview-btn up" data-idx="${fIdx}" title="前移一位" ${fIdx===0?'disabled':''}>▲</button>
+        <button type="button" class="upload-preview-btn down" data-idx="${fIdx}" title="后移一位" ${fIdx===S.pendingFiles.length-1?'disabled':''}>▼</button>
+      </div>
+      <button type="button" class="upload-preview-remove" title="移除">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
       </button>`;
+    
+    div.querySelectorAll('.upload-preview-btn.up').forEach(b=>{
+      b.addEventListener('click',()=>movePendingFile(fIdx, -1));
+    });
+    div.querySelectorAll('.upload-preview-btn.down').forEach(b=>{
+      b.addEventListener('click',()=>movePendingFile(fIdx, 1));
+    });
     div.querySelector('.upload-preview-remove').addEventListener('click',()=>{
       S.pendingFiles=S.pendingFiles.filter(f=>f!==file);
       renderUploadPreviews();
@@ -451,6 +579,34 @@ async function confirmUpload(){
   if(!S.pendingFiles.length){ toast('请先选择图片','error'); return; }
   const btn=$('uploadConfirm'); btn.disabled=true; btn.textContent='保存中…';
   try{
+    if(S.uploadMode === 'append'){
+      const targetId = $('appendTargetSelect')?.value;
+      const targetScore = S.scores.find(s=>s.id===targetId);
+      if(!targetScore){ toast('请选择要追加的目标乐谱','error'); return; }
+      
+      const newUrls = [];
+      let addSize = 0;
+      for(let i=0; i<S.pendingFiles.length; i++){
+        const file = S.pendingFiles[i];
+        addSize += file.size;
+        const dUrl = await fileToDataURL(file);
+        newUrls.push(dUrl);
+      }
+      
+      if(!targetScore.pages || !targetScore.pages.length){
+        targetScore.pages = [targetScore.dataURL];
+      }
+      targetScore.pages.push(...newUrls);
+      targetScore.fileSize = (targetScore.fileSize || 0) + addSize;
+      await dbPut('scores', targetScore);
+      
+      closeUploadModal();
+      renderAll();
+      toast(`已成功将 ${newUrls.length} 张乐谱追加至《${targetScore.title}》（现共 ${targetScore.pages.length} 页） 🎵`, 'success');
+      S.pendingFiles = [];
+      return;
+    }
+
     const title=$('uploadTitle').value.trim()||'未命名乐谱';
     const categoryId=$('uploadCategory').value;
     const composer=$('uploadComposer').value.trim();
@@ -489,7 +645,7 @@ async function confirmUpload(){
       S.scores.push(score);
       closeUploadModal();
       renderAll();
-      toast(`已保存多页乐谱《${title}》（共 ${dataURLs.length} 页） 🎵`, 'success');
+      toast(`已保存乐谱文件夹《${title}》（共 ${dataURLs.length} 页） 🎵`, 'success');
       S.pendingFiles = [];
       return;
     }
@@ -595,6 +751,7 @@ function closeViewer(){
   if(S.isAnnotating) toggleAnnotate();
   if(S.isStageMode) toggleStageMode();
   $('filterDropdown').classList.remove('open');
+  if($('viewerThumbsDrawer')) $('viewerThumbsDrawer').style.display='none';
   $('viewerBackdrop').classList.remove('open');
   document.body.style.overflow = '';
 }
@@ -647,6 +804,7 @@ function renderViewer(){
   } else {
     setupAnnotationCanvas();
   }
+  if($('viewerThumbsDrawer')?.style.display !== 'none') updateViewerThumbsDrawer();
 }
 
 function setupAnnotationCanvas(){
@@ -988,6 +1146,20 @@ function openEditModal(id){
   $('editNotes').value=s.notes||'';
   S.selDiff=s.difficulty||0;
   setDiffActive($('editDifficultyGroup'), S.selDiff);
+
+  const pagesCount = (s.pages && s.pages.length) ? s.pages.length : 1;
+  if($('editPagesCountText')){
+    $('editPagesCountText').textContent = pagesCount > 1
+      ? `共 ${pagesCount} 页 (乐谱文件夹)`
+      : `共 1 页 (单张乐谱)`;
+  }
+  if($('editOpenFolderBtn')){
+    $('editOpenFolderBtn').onclick = () => {
+      closeEditModal();
+      openFolderModal(s.id);
+    };
+  }
+
   $('editModalBackdrop').classList.add('open');
   setTimeout(()=>$('editTitle').focus(),80);
 }
@@ -1019,6 +1191,246 @@ function bindDiffGroup(groupId, uploadKey){
   const g=$(groupId);
   g.querySelectorAll('.diff-btn').forEach(b=>{
     b.addEventListener('click',()=>{ S.selDiff=parseInt(b.dataset.level); setDiffActive(g,S.selDiff); });
+  });
+}
+
+
+// ─────────────────────────────────────────
+// Score Folder Modal (乐谱文件夹管理)
+// ─────────────────────────────────────────
+function openFolderModal(scoreId){
+  const s = S.scores.find(x => x.id === scoreId);
+  if(!s) return;
+  S.folderModalScoreId = scoreId;
+  renderFolderModal();
+  $('folderModalBackdrop').classList.add('open');
+}
+
+function closeFolderModal(){
+  $('folderModalBackdrop').classList.remove('open');
+  S.folderModalScoreId = null;
+}
+
+function renderFolderModal(){
+  const s = S.scores.find(x => x.id === S.folderModalScoreId);
+  if(!s) return;
+  const pages = (s.pages && s.pages.length) ? s.pages : [s.dataURL];
+  $('folderModalTitle').textContent = `📁 乐谱文件夹 · 《${s.title}》`;
+  $('folderModalPageCount').textContent = `共 ${pages.length} 页`;
+  $('folderModalMeta').innerHTML = `
+    <span>🎼 作曲/来源：${esc(s.composer || '未填写')}</span>
+    <span>·</span>
+    <span>📅 添加时间：${fmtDate(s.createdAt)}</span>
+  `;
+
+  const grid = $('folderPagesGrid');
+  grid.innerHTML = '';
+
+  pages.forEach((pUrl, pIdx) => {
+    const item = document.createElement('div');
+    item.className = 'folder-page-item';
+    item.innerHTML = `
+      <div class="folder-page-thumb" title="点击直接打开全屏看谱 (第 ${pIdx+1} 页)">
+        <img src="${pUrl}" alt="第 ${pIdx+1} 页" loading="lazy" />
+        <span class="folder-page-num">第 ${pIdx+1} 页</span>
+      </div>
+      <div class="folder-page-actions">
+        <button type="button" class="folder-page-btn" data-act="prev" title="前移一位" ${pIdx===0?'disabled':''}>⬅️</button>
+        <button type="button" class="folder-page-btn" data-act="next" title="后移一位" ${pIdx===pages.length-1?'disabled':''}>➡️</button>
+        <button type="button" class="folder-page-btn" data-act="dl" title="下载本页">📥</button>
+        <button type="button" class="folder-page-btn danger" data-act="del" title="删除本页">🗑️</button>
+      </div>
+    `;
+
+    item.querySelector('.folder-page-thumb').addEventListener('click', () => {
+      closeFolderModal();
+      const scoreIdx = S.scores.findIndex(x => x.id === s.id);
+      openViewer(scoreIdx, S.scores, pIdx);
+    });
+
+    item.querySelector('[data-act="prev"]').addEventListener('click', () => {
+      moveScorePage(s.id, pIdx, -1);
+    });
+    item.querySelector('[data-act="next"]').addEventListener('click', () => {
+      moveScorePage(s.id, pIdx, 1);
+    });
+    item.querySelector('[data-act="dl"]').addEventListener('click', () => {
+      downloadSinglePage(s, pIdx);
+    });
+    item.querySelector('[data-act="del"]').addEventListener('click', () => {
+      deleteScorePage(s.id, pIdx);
+    });
+
+    grid.appendChild(item);
+  });
+}
+
+async function moveScorePage(scoreId, pIdx, dir){
+  const s = S.scores.find(x => x.id === scoreId);
+  if(!s) return;
+  const pages = (s.pages && s.pages.length) ? s.pages : [s.dataURL];
+  const targetIdx = pIdx + dir;
+  if(targetIdx < 0 || targetIdx >= pages.length) return;
+
+  const tmpPage = pages[pIdx];
+  pages[pIdx] = pages[targetIdx];
+  pages[targetIdx] = tmpPage;
+  s.pages = pages;
+  s.dataURL = pages[0];
+
+  if(s.annotations){
+    const a1 = s.annotations[pIdx];
+    const a2 = s.annotations[targetIdx];
+    delete s.annotations[pIdx];
+    delete s.annotations[targetIdx];
+    if(a1) s.annotations[targetIdx] = a1;
+    if(a2) s.annotations[pIdx] = a2;
+  }
+
+  await dbPut('scores', s);
+  renderFolderModal();
+  renderAll();
+  if($('viewerBackdrop').classList.contains('open') && S.viewerList[S.viewerIdx]?.id === scoreId){
+    renderViewer();
+  }
+}
+
+async function deleteScorePage(scoreId, pIdx){
+  const s = S.scores.find(x => x.id === scoreId);
+  if(!s) return;
+  const pages = (s.pages && s.pages.length) ? s.pages : [s.dataURL];
+  if(pages.length <= 1){
+    if(confirm('该乐谱夹仅剩最后一页图片，删除将彻底删除整首乐谱，确定继续吗？')){
+      await dbDel('scores', scoreId);
+      S.scores = S.scores.filter(x => x.id !== scoreId);
+      closeFolderModal();
+      closeViewer();
+      renderAll();
+      toast('乐谱已删除');
+    }
+    return;
+  }
+
+  if(!confirm(`确定从《${s.title}》中删除第 ${pIdx+1} 页图片？`)) return;
+
+  pages.splice(pIdx, 1);
+  s.pages = pages;
+  s.dataURL = pages[0];
+
+  if(s.annotations){
+    const newAnnot = {};
+    Object.keys(s.annotations).forEach(k => {
+      const idx = parseInt(k);
+      if(idx < pIdx) newAnnot[idx] = s.annotations[idx];
+      else if(idx > pIdx) newAnnot[idx - 1] = s.annotations[idx];
+    });
+    s.annotations = newAnnot;
+  }
+
+  await dbPut('scores', s);
+  renderFolderModal();
+  renderAll();
+  if($('viewerBackdrop').classList.contains('open') && S.viewerList[S.viewerIdx]?.id === scoreId){
+    if(S.viewerPageIdx >= pages.length) S.viewerPageIdx = pages.length - 1;
+    renderViewer();
+  }
+  toast(`已删除第 ${pIdx+1} 页，现剩余 ${pages.length} 页`);
+}
+
+async function appendPagesToScore(scoreId, files){
+  const s = S.scores.find(x => x.id === scoreId);
+  if(!s) return;
+  const imgs = Array.from(files).filter(f => f.type.startsWith('image/'));
+  if(!imgs.length){ toast('请选择有效的乐谱图片文件', 'error'); return; }
+
+  const newUrls = [];
+  let totalAddSize = 0;
+  for(let i=0; i<imgs.length; i++){
+    const file = imgs[i];
+    totalAddSize += file.size;
+    const dUrl = await fileToDataURL(file);
+    newUrls.push(dUrl);
+  }
+
+  if(!s.pages || !s.pages.length) s.pages = [s.dataURL];
+  s.pages.push(...newUrls);
+  s.fileSize = (s.fileSize || 0) + totalAddSize;
+  await dbPut('scores', s);
+
+  renderFolderModal();
+  renderAll();
+  if($('viewerBackdrop').classList.contains('open') && S.viewerList[S.viewerIdx]?.id === scoreId){
+    renderViewer();
+  }
+  toast(`成功追加 ${newUrls.length} 张图片至《${s.title}》（共 ${s.pages.length} 页） 🎵`, 'success');
+}
+
+function promptAppendScore(scoreId){
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = 'image/*';
+  inp.multiple = true;
+  inp.style.display = 'none';
+  document.body.appendChild(inp);
+  inp.addEventListener('change', async e => {
+    if(e.target.files && e.target.files.length){
+      await appendPagesToScore(scoreId, e.target.files);
+    }
+    inp.remove();
+  });
+  inp.click();
+}
+
+function downloadSinglePage(score, pageIdx){
+  const pages = (score.pages && score.pages.length) ? score.pages : [score.dataURL];
+  const url = pages[pageIdx] || score.dataURL;
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${score.title}_第${pageIdx+1}页.${(score.fileType || 'image/jpeg').split('/')[1] || 'jpg'}`;
+  a.click();
+}
+
+// ─────────────────────────────────────────
+// Viewer Thumbnail Drawer
+// ─────────────────────────────────────────
+function toggleViewerThumbsDrawer(){
+  const drawer = $('viewerThumbsDrawer');
+  if(!drawer) return;
+  const isOpen = drawer.style.display !== 'none';
+  if(isOpen){
+    drawer.style.display = 'none';
+  } else {
+    drawer.style.display = 'block';
+    updateViewerThumbsDrawer();
+  }
+}
+
+function updateViewerThumbsDrawer(){
+  const drawer = $('viewerThumbsDrawer');
+  if(!drawer || drawer.style.display === 'none') return;
+  const score = S.viewerList[S.viewerIdx];
+  if(!score) return;
+  const pages = (score.pages && score.pages.length) ? score.pages : [score.dataURL];
+  const list = $('viewerThumbsList');
+  if(!list) return;
+  list.innerHTML = '';
+
+  pages.forEach((pUrl, pIdx) => {
+    const item = document.createElement('div');
+    const isActive = pIdx === S.viewerPageIdx;
+    item.className = 'viewer-thumb-item' + (isActive ? ' active' : '');
+    item.title = `第 ${pIdx+1} 页`;
+    item.innerHTML = `
+      <img src="${pUrl}" alt="第 ${pIdx+1} 页" loading="lazy" />
+      <span class="viewer-thumb-num">${pIdx+1}</span>
+    `;
+    item.addEventListener('click', () => {
+      saveAnnotation();
+      S.viewerPageIdx = pIdx;
+      renderViewer();
+      updateViewerThumbsDrawer();
+    });
+    list.appendChild(item);
   });
 }
 
@@ -1262,6 +1674,7 @@ document.addEventListener('keydown', e => {
     if($('uploadModalBackdrop').classList.contains('open')) closeUploadModal();
     if($('categoryModalBackdrop').classList.contains('open')) closeCatModal();
     if($('editModalBackdrop').classList.contains('open')) closeEditModal();
+    if($('folderModalBackdrop')?.classList.contains('open')) closeFolderModal();
     if($('settingsPanel').classList.contains('open')) closeSettings();
   }
 });

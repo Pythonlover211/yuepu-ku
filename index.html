@@ -282,52 +282,71 @@
       </div>
       <div id="uploadPreviewList"></div>
       <div class="upload-form" id="uploadForm" style="display:none">
-        <div class="form-row">
-          <div class="form-group">
-            <label for="uploadTitle">🏷️ 乐谱名称</label>
-            <input type="text" id="uploadTitle" placeholder="为这张乐谱起个名字…" maxlength="50" />
-          </div>
-          <div class="form-group">
-            <label for="uploadCategory">📂 所属分类</label>
-            <select id="uploadCategory">
-              <option value="">— 不分类 —</option>
-            </select>
-          </div>
+        <!-- Upload Mode Switcher -->
+        <div class="upload-mode-switcher">
+          <button type="button" class="upload-mode-btn active" id="uploadModeNew" data-mode="new">
+            <span>📁 新建乐谱 / 乐谱夹</span>
+          </button>
+          <button type="button" class="upload-mode-btn" id="uploadModeAppend" data-mode="append">
+            <span>📥 追加到已有乐谱</span>
+          </button>
         </div>
-        <div class="form-group">
-          <label for="uploadComposer">🎼 作曲家 / 来源</label>
-          <input type="text" id="uploadComposer" placeholder="如：贝多芬、肖邦、自创…" maxlength="50" />
+
+        <!-- Target score select for append mode -->
+        <div class="form-group" id="appendTargetGroup" style="display:none">
+          <label for="appendTargetSelect">📂 选择要追加的目标乐谱</label>
+          <select id="appendTargetSelect"></select>
+          <p class="form-hint" style="font-size:11.5px;color:var(--txt3);margin-top:4px">选中的图片将作为新页面按顺序追加到该乐谱夹后部</p>
         </div>
-        <div class="form-group">
-          <label for="uploadTags">🔖 标签（逗号分隔）</label>
-          <input type="text" id="uploadTags" placeholder="如：钢琴, 古典, 练习曲…" />
-          <div class="tag-suggestions" id="tagSuggestions"></div>
-        </div>
-        <div class="form-group">
-          <label for="uploadNotes">📝 备注</label>
-          <textarea id="uploadNotes" rows="2" placeholder="难度、演奏技巧等备注…"></textarea>
-        </div>
-        <div class="form-group">
-          <label>🎵 难度</label>
-          <div class="difficulty-group" id="difficultyGroup">
-            <button class="diff-btn active" data-level="0">不设置</button>
-            <button class="diff-btn" data-level="1">★ 入门</button>
-            <button class="diff-btn" data-level="2">★★ 初级</button>
-            <button class="diff-btn" data-level="3">★★★ 中级</button>
-            <button class="diff-btn" data-level="4">★★★★ 高级</button>
-            <button class="diff-btn" data-level="5">★★★★★ 专业</button>
-          </div>
-        </div>
-        <!-- Multi-page Merge Option -->
-        <div class="form-group merge-pages-group" id="mergePagesGroup" style="display:none">
-          <label class="merge-toggle-card">
-            <input type="checkbox" id="mergePagesCheck" checked />
-            <span class="merge-checkbox-box"></span>
-            <div class="merge-toggle-info">
-              <span class="merge-toggle-title">📚 合并为一本多页乐谱</span>
-              <span class="merge-toggle-desc">将选中的所有图片作为同一首乐谱的连续页（看谱时可顺畅翻页）</span>
+
+        <div id="newScoreFields">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="uploadTitle">🏷️ 乐谱名称</label>
+              <input type="text" id="uploadTitle" placeholder="为这张乐谱起个名字…" maxlength="50" />
             </div>
-          </label>
+            <div class="form-group">
+              <label for="uploadCategory">📂 所属分类</label>
+              <select id="uploadCategory">
+                <option value="">— 不分类 —</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="uploadComposer">🎼 作曲家 / 来源</label>
+            <input type="text" id="uploadComposer" placeholder="如：贝多芬、肖邦、自创…" maxlength="50" />
+          </div>
+          <div class="form-group">
+            <label for="uploadTags">🔖 标签（逗号分隔）</label>
+            <input type="text" id="uploadTags" placeholder="如：钢琴, 古典, 练习曲…" />
+            <div class="tag-suggestions" id="tagSuggestions"></div>
+          </div>
+          <div class="form-group">
+            <label for="uploadNotes">📝 备注</label>
+            <textarea id="uploadNotes" rows="2" placeholder="难度、演奏技巧等备注…"></textarea>
+          </div>
+          <div class="form-group">
+            <label>🎵 难度</label>
+            <div class="difficulty-group" id="difficultyGroup">
+              <button class="diff-btn active" data-level="0">不设置</button>
+              <button class="diff-btn" data-level="1">★ 入门</button>
+              <button class="diff-btn" data-level="2">★★ 初级</button>
+              <button class="diff-btn" data-level="3">★★★ 中级</button>
+              <button class="diff-btn" data-level="4">★★★★ 高级</button>
+              <button class="diff-btn" data-level="5">★★★★★ 专业</button>
+            </div>
+          </div>
+          <!-- Multi-page Merge Option -->
+          <div class="form-group merge-pages-group" id="mergePagesGroup" style="display:none">
+            <label class="merge-toggle-card">
+              <input type="checkbox" id="mergePagesCheck" checked />
+              <span class="merge-checkbox-box"></span>
+              <div class="merge-toggle-info">
+                <span class="merge-toggle-title">📁 折叠为一个乐谱文件夹</span>
+                <span class="merge-toggle-desc">将选中的所有图片收纳为同一首曲目的连续页面（支持在列表折叠/展开、全屏连续翻页与单独管理各页）</span>
+              </div>
+            </label>
+          </div>
         </div>
       </div>
     </div>
@@ -410,6 +429,10 @@
       </div>
     </div>
     <div class="viewer-actions">
+      <!-- 页面缩略图目录 -->
+      <button class="viewer-btn" id="viewerThumbsBtn" title="查看所有页面缩略图">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="14" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/></svg>
+      </button>
       <!-- 滤镜切换 -->
       <button class="viewer-btn" id="viewerFilterBtn" title="滤镜模式（原图/护眼/夜间反相/高对比）">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg>
@@ -521,10 +544,21 @@
     </div>
 
     <!-- Floating Multi-page Navigation Pill -->
-    <div class="viewer-page-pill" id="viewerPagePill" style="display:none">
+    <div class="viewer-page-pill" id="viewerPagePill" style="display:none" title="点击展开页面缩略图目录">
       <button class="page-pill-btn" id="pagePillPrev" title="上一页 (PageUp / ←)">‹</button>
       <span class="page-pill-text" id="pagePillText">第 1 / 1 页</span>
       <button class="page-pill-btn" id="pagePillNext" title="下一页 (PageDown / →)">›</button>
+    </div>
+
+    <!-- Floating Thumbnail Drawer -->
+    <div class="viewer-thumbs-drawer" id="viewerThumbsDrawer" style="display:none">
+      <div class="thumbs-drawer-header">
+        <span>📑 乐谱页面目录</span>
+        <button class="icon-btn sm" id="closeThumbsDrawerBtn" title="收起目录">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="thumbs-drawer-list" id="viewerThumbsList"></div>
     </div>
 
     <!-- Stage Mode Hint Banner -->
@@ -581,11 +615,55 @@
           <button class="diff-btn" data-level="4">★★★★ 高级</button>
           <button class="diff-btn" data-level="5">★★★★★ 专业</button>
         </div>
+        <div class="form-group">
+          <label>📁 乐谱文件夹各页管理</label>
+          <div class="edit-folder-manage-box">
+            <span class="edit-pages-count" id="editPagesCountText">共 1 页</span>
+            <button type="button" class="btn-secondary sm" id="editOpenFolderBtn">
+              📂 管理图片页面 (排序/追加/删除)
+            </button>
+          </div>
+        </div>
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn-secondary" id="editCancel">取消</button>
       <button class="btn-primary" id="editConfirm">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- ░░░ SCORE FOLDER MODAL (乐谱文件夹管理) ░░░ -->
+<div class="modal-backdrop" id="folderModalBackdrop">
+  <div class="modal modal-lg" id="folderModal">
+    <div class="modal-header">
+      <div class="folder-header-titles">
+        <h2 id="folderModalTitle">📁 乐谱文件夹</h2>
+        <span class="folder-page-count-badge" id="folderModalPageCount">共 0 页</span>
+      </div>
+      <button class="icon-btn" id="folderModalClose">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="folder-bar">
+        <div class="folder-meta-desc" id="folderModalMeta"></div>
+        <div class="folder-actions-row">
+          <input type="file" id="folderAppendInput" accept="image/*" multiple hidden />
+          <button class="btn-secondary sm" id="folderAppendBtn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+            追加乐谱图片
+          </button>
+          <button class="btn-primary sm" id="folderPlayBtn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><polygon points="5 3 19 12 5 21 5 3" fill="currentColor"/></svg>
+            从第 1 页看谱
+          </button>
+        </div>
+      </div>
+      <div class="folder-pages-grid" id="folderPagesGrid"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" id="folderCloseBtn">关闭</button>
     </div>
   </div>
 </div>
