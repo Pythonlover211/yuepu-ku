@@ -49,6 +49,7 @@ const S = {
   pendingFiles: [],
   expandedFolders: new Set(),
   folderModalScoreId: null,
+  pendingAppendScoreId: null,
   uploadMode: 'new',
 };
 
@@ -63,7 +64,14 @@ function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').rep
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2); }
 function fmtDate(ts){ const d=new Date(ts); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 function fmtSize(b){ if(b<1024)return b+'B'; if(b<1048576)return(b/1024).toFixed(1)+'KB'; return(b/1048576).toFixed(2)+'MB'; }
-function fileToDataURL(file){ return new Promise(res=>{ const r=new FileReader(); r.onload=e=>res(e.target.result); r.readAsDataURL(file); }); }
+function fileToDataURL(file){
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = e => res(e.target.result);
+    r.onerror = e => rej(e);
+    r.readAsDataURL(file);
+  });
+}
 function hexToRgba(hex, alpha){
   let c = hex.replace('#','');
   if(c.length===3) c=c.split('').map(x=>x+x).join('');
@@ -1340,24 +1348,32 @@ async function deleteScorePage(scoreId, pIdx){
 async function appendPagesToScore(scoreId, files){
   const s = S.scores.find(x => x.id === scoreId);
   if(!s) return;
-  const imgs = Array.from(files).filter(f => f.type.startsWith('image/'));
+  const imgs = Array.from(files).filter(f => !f.type || f.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|gif|svg|bmp)$/i.test(f.name));
   if(!imgs.length){ toast('请选择有效的乐谱图片文件', 'error'); return; }
 
   const newUrls = [];
   let totalAddSize = 0;
-  for(let i=0; i<imgs.length; i++){
+  for(let i = 0; i < imgs.length; i++){
     const file = imgs[i];
-    totalAddSize += file.size;
-    const dUrl = await fileToDataURL(file);
-    newUrls.push(dUrl);
+    totalAddSize += file.size || 0;
+    try {
+      const dUrl = await fileToDataURL(file);
+      newUrls.push(dUrl);
+    } catch(err){
+      console.error('读取图片失败:', file.name, err);
+    }
   }
+
+  if(!newUrls.length){ toast('未能成功读取图片文件，请重试', 'error'); return; }
 
   if(!s.pages || !s.pages.length) s.pages = [s.dataURL];
   s.pages.push(...newUrls);
   s.fileSize = (s.fileSize || 0) + totalAddSize;
   await dbPut('scores', s);
 
-  renderFolderModal();
+  if(S.folderModalScoreId === scoreId){
+    renderFolderModal();
+  }
   renderAll();
   if($('viewerBackdrop').classList.contains('open') && S.viewerList[S.viewerIdx]?.id === scoreId){
     renderViewer();
@@ -1366,19 +1382,26 @@ async function appendPagesToScore(scoreId, files){
 }
 
 function promptAppendScore(scoreId){
-  const inp = document.createElement('input');
-  inp.type = 'file';
-  inp.accept = 'image/*';
-  inp.multiple = true;
-  inp.style.display = 'none';
-  document.body.appendChild(inp);
-  inp.addEventListener('change', async e => {
-    if(e.target.files && e.target.files.length){
-      await appendPagesToScore(scoreId, e.target.files);
-    }
-    inp.remove();
-  });
-  inp.click();
+  S.pendingAppendScoreId = scoreId;
+  const inp = $('folderAppendInput');
+  if(inp){
+    inp.value = '';
+    inp.click();
+  } else {
+    const fallbackInp = document.createElement('input');
+    fallbackInp.type = 'file';
+    fallbackInp.accept = 'image/*';
+    fallbackInp.multiple = true;
+    fallbackInp.style.display = 'none';
+    document.body.appendChild(fallbackInp);
+    fallbackInp.addEventListener('change', async e => {
+      if(e.target.files && e.target.files.length){
+        await appendPagesToScore(scoreId, e.target.files);
+      }
+      fallbackInp.remove();
+    });
+    fallbackInp.click();
+  }
 }
 
 function downloadSinglePage(score, pageIdx){
@@ -1867,6 +1890,49 @@ function bindEvents(){
     closeSettings(); renderAll();
     toast('已清空所有数据');
   });
+
+  // Folder Modal & Appending
+  $('folderModalClose')?.addEventListener('click', closeFolderModal);
+  $('folderCloseBtn')?.addEventListener('click', closeFolderModal);
+  $('folderModalBackdrop')?.addEventListener('click', e => {
+    if(e.target === $('folderModalBackdrop')) closeFolderModal();
+  });
+  $('folderAppendBtn')?.addEventListener('click', () => {
+    S.pendingAppendScoreId = S.folderModalScoreId;
+    const inp = $('folderAppendInput');
+    if(inp){
+      inp.value = '';
+      inp.click();
+    }
+  });
+  $('folderAppendInput')?.addEventListener('change', async e => {
+    const targetId = S.folderModalScoreId || S.pendingAppendScoreId;
+    if(e.target.files && e.target.files.length && targetId){
+      await appendPagesToScore(targetId, e.target.files);
+    }
+    S.pendingAppendScoreId = null;
+    e.target.value = '';
+  });
+  $('folderPlayBtn')?.addEventListener('click', () => {
+    if(S.folderModalScoreId){
+      const scoreId = S.folderModalScoreId;
+      closeFolderModal();
+      const scoreIdx = S.scores.findIndex(x => x.id === scoreId);
+      if(scoreIdx !== -1) openViewer(scoreIdx, S.scores, 0);
+    }
+  });
+
+  // Viewer Thumbs Drawer
+  $('viewerThumbsBtn')?.addEventListener('click', toggleViewerThumbsDrawer);
+  $('closeThumbsDrawerBtn')?.addEventListener('click', () => {
+    const drawer = $('viewerThumbsDrawer');
+    if(drawer) drawer.style.display = 'none';
+  });
+  $('pagePillText')?.addEventListener('click', toggleViewerThumbsDrawer);
+
+  // Upload Mode Switcher
+  $('uploadModeNew')?.addEventListener('click', () => setUploadMode('new'));
+  $('uploadModeAppend')?.addEventListener('click', () => setUploadMode('append'));
 
   // Backdrop clicks
   $('uploadModalBackdrop').addEventListener('click',e=>{ if(e.target===$('uploadModalBackdrop')) closeUploadModal(); });
