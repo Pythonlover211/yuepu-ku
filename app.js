@@ -1880,12 +1880,101 @@ function bindEvents(){
 // ─────────────────────────────────────────
 // Boot
 // ─────────────────────────────────────────
+
+function makeScoreSvg(title, composer, pageNum, totalPages){
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 1100" width="800" height="1100">
+    <rect width="800" height="1100" fill="#fdfcf7"/>
+    <text x="400" y="72" font-family="'Noto Serif SC', serif, Georgia" font-size="28" font-weight="bold" text-anchor="middle" fill="#1e293b">${esc(title)}</text>
+    <text x="720" y="105" font-family="sans-serif" font-size="14" text-anchor="end" fill="#64748b">${esc(composer)}</text>
+    <text x="400" y="1050" font-family="sans-serif" font-size="13" text-anchor="middle" fill="#94a3b8">- ${pageNum} / ${totalPages} -</text>
+    <g stroke="#334155" stroke-width="1.2">
+      ${[160, 330, 500, 670, 840].map(y => `
+        <line x1="60" y1="${y}" x2="740" y2="${y}"/>
+        <line x1="60" y1="${y+12}" x2="740" y2="${y+12}"/>
+        <line x1="60" y1="${y+24}" x2="740" y2="${y+24}"/>
+        <line x1="60" y1="${y+36}" x2="740" y2="${y+36}"/>
+        <line x1="60" y1="${y+48}" x2="740" y2="${y+48}"/>
+        <line x1="60" y1="${y}" x2="60" y2="${y+48}" stroke-width="2.5"/>
+        <line x1="740" y1="${y}" x2="740" y2="${y+48}" stroke-width="2.5"/>
+      `).join('')}
+    </g>
+    <g fill="#1e293b">
+      ${[160, 330, 500, 670, 840].map(y => `
+        <text x="75" y="${y+40}" font-family="serif" font-size="44">𝄞</text>
+        <circle cx="160" cy="${y+24}" r="5.5"/><line x1="165" y1="${y+24}" x2="165" y2="${y-6}" stroke="#1e293b" stroke-width="2"/>
+        <circle cx="250" cy="${y+30}" r="5.5"/><line x1="255" y1="${y+30}" x2="255" y2="${y}" stroke="#1e293b" stroke-width="2"/>
+        <circle cx="340" cy="${y+18}" r="5.5"/><line x1="345" y1="${y+18}" x2="345" y2="${y-12}" stroke="#1e293b" stroke-width="2"/>
+        <circle cx="430" cy="${y+36}" r="5.5"/><line x1="435" y1="${y+36}" x2="435" y2="${y+6}" stroke="#1e293b" stroke-width="2"/>
+        <circle cx="520" cy="${y+24}" r="5.5"/><line x1="525" y1="${y+24}" x2="525" y2="${y-6}" stroke="#1e293b" stroke-width="2"/>
+        <circle cx="610" cy="${y+12}" r="5.5"/><line x1="615" y1="${y+12}" x2="615" y2="${y-18}" stroke="#1e293b" stroke-width="2"/>
+        <circle cx="690" cy="${y+24}" r="5.5"/><line x1="695" y1="${y+24}" x2="695" y2="${y-6}" stroke="#1e293b" stroke-width="2"/>
+      `).join('')}
+    </g>
+  </svg>`;
+  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+}
+
+async function seedInitialDemoData(){
+  const catId = uid();
+  const demoCat = { id: catId, name: '古典钢琴', color: '#a78bfa', emoji: '🎹', createdAt: Date.now() };
+  await dbPut('categories', demoCat);
+  S.categories.push(demoCat);
+
+  const p1 = makeScoreSvg('月光奏鸣曲 第三乐章', '贝多芬 (L. v. Beethoven)', 1, 3);
+  const p2 = makeScoreSvg('月光奏鸣曲 第三乐章 (发展部)', '贝多芬 (L. v. Beethoven)', 2, 3);
+  const p3 = makeScoreSvg('月光奏鸣曲 第三乐章 (尾声)', '贝多芬 (L. v. Beethoven)', 3, 3);
+
+  const folderScore = {
+    id: uid(),
+    title: '月光奏鸣曲 第三乐章',
+    categoryId: catId,
+    composer: '贝多芬',
+    tags: ['钢琴', '古典', '奏鸣曲'],
+    notes: 'Presto agitato 激动的急板，经典多页折叠乐谱夹',
+    difficulty: 4,
+    dataURL: p1,
+    pages: [p1, p2, p3],
+    annotations: {},
+    filterMode: 'normal',
+    fileSize: 45000,
+    fileType: 'image/svg+xml',
+    favorite: true,
+    createdAt: Date.now() - 3600000
+  };
+  await dbPut('scores', folderScore);
+  S.scores.push(folderScore);
+
+  const singlePage = makeScoreSvg('降E大调夜曲 Op.9 No.2', '肖邦 (F. Chopin)', 1, 1);
+  const singleScore = {
+    id: uid(),
+    title: '降E大调夜曲 Op.9 No.2',
+    categoryId: catId,
+    composer: '肖邦',
+    tags: ['钢琴', '夜曲', '浪漫'],
+    notes: 'Andante 行板，单页乐谱示例',
+    difficulty: 3,
+    dataURL: singlePage,
+    pages: [singlePage],
+    annotations: {},
+    filterMode: 'normal',
+    fileSize: 18000,
+    fileType: 'image/svg+xml',
+    favorite: false,
+    createdAt: Date.now() - 7200000
+  };
+  await dbPut('scores', singleScore);
+  S.scores.push(singleScore);
+}
+
 async function boot(){
   try{
     await initDB();
     await loadSettings();
     const [scores,cats]=await Promise.all([dbAll('scores'),dbAll('categories')]);
     S.scores=scores; S.categories=cats;
+    if(!scores.length && !cats.length){
+      await seedInitialDemoData();
+    }
     applyTheme(S.theme);
     applyBackground();
     bindEvents();
