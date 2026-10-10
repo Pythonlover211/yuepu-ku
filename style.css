@@ -1338,3 +1338,184 @@ body{background:var(--bg0);color:var(--txt1)}
   .viewer-footer{padding-bottom:max(9px,env(safe-area-inset-bottom))}
   .toast-container{bottom:max(24px,calc(env(safe-area-inset-bottom)+14px))}
 }
+
+/* ══════════════════════════════════════════
+   PRACTICE & CHECK-IN (每日练琴打卡与统计)
+   ══════════════════════════════════════════ */
+.practice-topbar-btn{
+  display:inline-flex;align-items:center;gap:6px;padding:6px 13px;
+  background:var(--primary-dim);border:1px solid var(--primary-glow);
+  border-radius:20px;color:var(--txt1);font-size:12.5px;font-weight:600;
+  cursor:pointer;transition:all var(--ease);margin-right:4px;
+}
+.practice-topbar-btn:hover{
+  background:var(--primary-glow);transform:translateY(-1px);
+  box-shadow:0 4px 14px var(--btn-shadow);
+}
+.practice-topbar-btn .pt-icon{font-size:14px;line-height:1}
+.practice-topbar-btn .pt-badge{
+  background:var(--btn-grad);color:#fff;font-size:10.5px;padding:2px 7px;
+  border-radius:10px;font-weight:700;letter-spacing:.3px;
+}
+.practice-topbar-btn.is-checked{
+  border-color:rgba(52,211,153,.4);background:rgba(52,211,153,.12);
+}
+.practice-topbar-btn.is-checked .pt-badge{
+  background:linear-gradient(135deg,#059669,#10b981);
+}
+
+.practice-header-titles{display:flex;align-items:center;gap:10px}
+.practice-badge{
+  font-size:11.5px;font-weight:700;padding:2px 9px;border-radius:20px;
+  background:var(--primary-dim);color:var(--primary);border:1px solid var(--primary-glow);
+}
+
+/* Stats Row */
+.practice-stats-grid{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:11px;margin-bottom:16px;
+}
+.practice-stat-card{
+  background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-sm);
+  padding:12px 14px;display:flex;align-items:center;gap:12px;
+  transition:all var(--ease);
+}
+.practice-stat-card:hover{
+  border-color:var(--primary-glow);background:var(--bg3);
+}
+.practice-stat-card .stat-icon{font-size:26px;line-height:1;flex-shrink:0}
+.practice-stat-card .stat-meta{display:flex;flex-direction:column}
+.practice-stat-card .stat-val{font-size:16px;font-weight:700;color:var(--txt1)}
+.practice-stat-card .stat-label{font-size:11px;color:var(--txt3);margin-top:2px}
+
+/* Tabs */
+.practice-tabs{
+  display:flex;gap:8px;border-bottom:1px solid var(--border);
+  padding-bottom:10px;margin-bottom:16px;
+}
+.practice-tab-btn{
+  padding:6px 15px;border-radius:20px;font-size:13px;font-weight:600;color:var(--txt3);
+  background:var(--glass);border:1px solid transparent;transition:all var(--ease);
+}
+.practice-tab-btn:hover{color:var(--txt1);background:var(--bg3)}
+.practice-tab-btn.active{
+  background:var(--primary-dim);color:var(--primary);border-color:var(--primary-glow);
+}
+
+/* Today Banner */
+.practice-today-banner{
+  background:linear-gradient(135deg,var(--bg2),var(--bg3));
+  border:1px solid var(--border);border-radius:var(--r-sm);padding:14px 16px;
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+}
+.practice-today-banner.is-done{
+  background:linear-gradient(135deg,rgba(52,211,153,.1),rgba(16,185,129,.18));
+  border-color:rgba(52,211,153,.35);
+}
+.today-banner-text h3{font-size:14.5px;font-weight:700;color:var(--txt1);margin-bottom:3px}
+.today-banner-text p{font-size:12px;color:var(--txt3);line-height:1.4}
+.today-banner-date{
+  font-size:11.5px;font-weight:700;color:var(--primary);padding:3px 9px;
+  background:var(--primary-dim);border-radius:6px;white-space:nowrap;
+}
+.practice-today-banner.is-done .today-banner-date{
+  color:#34d399;background:rgba(52,211,153,.18);
+}
+
+/* Pills */
+.duration-pill-group, .mood-pill-group{display:flex;gap:7px;flex-wrap:wrap;margin-top:6px}
+.duration-pill-btn, .mood-pill-btn{
+  padding:6px 12px;font-size:12px;font-weight:500;color:var(--txt2);
+  background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-sm);
+  transition:all var(--ease);
+}
+.duration-pill-btn:hover, .mood-pill-btn:hover{border-color:var(--primary);color:var(--txt1)}
+.duration-pill-btn.active, .mood-pill-btn.active{
+  background:var(--primary-dim);color:var(--primary);border-color:var(--primary);
+  font-weight:700;box-shadow:0 0 10px var(--primary-glow);
+}
+
+/* Calendar */
+.practice-calendar-wrap{
+  background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-sm);padding:14px;
+}
+.calendar-header-bar{
+  display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;
+}
+.calendar-cur-month{font-size:14px;font-weight:700;color:var(--txt1)}
+.calendar-weekdays{
+  display:grid;grid-template-columns:repeat(7,1fr);text-align:center;
+  font-size:11.5px;font-weight:600;color:var(--txt4);margin-bottom:6px;
+}
+.calendar-days-grid{
+  display:grid;grid-template-columns:repeat(7,1fr);gap:5px;
+}
+.cal-day-cell{
+  aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  border-radius:8px;font-size:12.5px;color:var(--txt2);position:relative;cursor:pointer;
+  border:1px solid transparent;background:var(--bg1);transition:all var(--ease);
+}
+.cal-day-cell:hover{background:var(--bg3);border-color:var(--border)}
+.cal-day-cell.empty{pointer-events:none;opacity:0}
+.cal-day-cell.today{border-color:var(--primary);font-weight:700;box-shadow:0 0 8px var(--primary-glow)}
+.cal-day-cell.checked{
+  background:rgba(52,211,153,.14);border-color:rgba(52,211,153,.45);color:#34d399;font-weight:700;
+}
+.cal-day-cell.checked .cal-day-note{
+  font-size:9px;line-height:1;margin-top:2px;
+}
+.cal-day-cell.selected{box-shadow:0 0 0 2px var(--primary)}
+.calendar-day-detail{
+  background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-sm);padding:12px 14px;
+}
+
+/* History */
+.practice-history-list{
+  display:flex;flex-direction:column;gap:10px;max-height:48vh;max-height:48dvh;overflow-y:auto;
+}
+.practice-history-item{
+  background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-sm);
+  padding:12px 14px;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;
+  transition:all var(--ease);
+}
+.practice-history-item:hover{border-color:var(--primary-glow);background:var(--bg3)}
+.history-item-left{flex:1}
+.history-item-title{
+  font-size:13.5px;font-weight:600;color:var(--txt1);display:flex;align-items:center;gap:7px;flex-wrap:wrap;
+}
+.history-item-duration{
+  font-size:11px;font-weight:700;padding:2px 7px;border-radius:10px;
+  background:var(--primary-dim);color:var(--primary);
+}
+.history-item-notes{font-size:12px;color:var(--txt2);margin-top:5px;line-height:1.4}
+.history-item-date{font-size:11px;color:var(--txt4);margin-top:5px}
+.history-item-del{color:var(--txt4);padding:4px;border-radius:4px;transition:all var(--ease)}
+.history-item-del:hover{color:#f87171;background:rgba(248,113,113,.15)}
+
+/* Toggle Switch & Reminder Box */
+.settings-reminder-box{
+  background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-sm);padding:14px;
+}
+.reminder-switch-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.reminder-switch-title{font-size:13px;font-weight:600;color:var(--txt1)}
+.reminder-switch-sub{font-size:11.5px;color:var(--txt3);margin-top:2px}
+.toggle-switch{position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0}
+.toggle-switch input{opacity:0;width:0;height:0}
+.toggle-slider{
+  position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;
+  background-color:var(--bg3);border:1px solid var(--border);border-radius:24px;
+  transition:all var(--ease);
+}
+.toggle-slider:before{
+  position:absolute;content:"";height:18px;width:18px;left:2px;bottom:2px;
+  background-color:var(--txt1);border-radius:50%;transition:all var(--ease);
+}
+.toggle-switch input:checked + .toggle-slider{background:var(--primary);border-color:var(--primary)}
+.toggle-switch input:checked + .toggle-slider:before{transform:translateX(20px)}
+
+@media(max-width:768px){
+  .practice-stats-grid{grid-template-columns:repeat(2,1fr);gap:8px}
+  .practice-topbar-btn .pt-text{display:none}
+  .practice-topbar-btn{padding:6px 9px}
+  .duration-pill-group,.mood-pill-group{gap:5px}
+  .duration-pill-btn,.mood-pill-btn{padding:5px 9px;font-size:11.5px}
+}

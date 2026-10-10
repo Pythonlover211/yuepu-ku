@@ -2,7 +2,7 @@
 // ─────────────────────────────────────────
 // IndexedDB
 // ─────────────────────────────────────────
-const DB_NAME = 'MusicScoreDB2', DB_VER = 2;
+const DB_NAME = 'MusicScoreDB2', DB_VER = 3;
 let db = null;
 
 function initDB() {
@@ -18,6 +18,11 @@ function initDB() {
         d.createObjectStore('categories', { keyPath: 'id' });
       if (!d.objectStoreNames.contains('settings'))
         d.createObjectStore('settings', { keyPath: 'key' });
+      if (!d.objectStoreNames.contains('checkins')) {
+        const cs = d.createObjectStore('checkins', { keyPath: 'id' });
+        cs.createIndex('date', 'date', { unique: false });
+        cs.createIndex('createdAt', 'createdAt', { unique: false });
+      }
     };
     r.onsuccess = e => { db = e.target.result; res(db); };
     r.onerror = () => rej(r.error);
@@ -51,6 +56,17 @@ const S = {
   folderModalScoreId: null,
   pendingAppendScoreId: null,
   uploadMode: 'new',
+  // Practice & Reminder state
+  checkins: [],
+  selectedDuration: 30,
+  selectedMood: '😊 渐入佳境',
+  calYear: new Date().getFullYear(),
+  calMonth: new Date().getMonth(),
+  reminderEnabled: false,
+  reminderTime: '20:00',
+  reminderText: '🎹 该练琴啦！保持指尖记忆，今天也要坚持弹奏哦～',
+  lastRemindedDate: null,
+  snoozeUntil: 0,
 };
 
 const DIFF_LABELS = ['','★ 入门','★★ 初级','★★★ 中级','★★★★ 高级','★★★★★ 专业'];
@@ -167,6 +183,10 @@ async function loadSettings(){
     if(r.key==='cardSize' && r.value) S.cardSize=r.value;
     if(r.key==='viewMode' && r.value) S.viewMode=r.value;
     if(r.key==='sort' && r.value) S.sort=r.value;
+    if(r.key==='reminderEnabled' && r.value!=null) S.reminderEnabled=Boolean(r.value);
+    if(r.key==='reminderTime' && r.value) S.reminderTime=r.value;
+    if(r.key==='reminderText' && r.value) S.reminderText=r.value;
+    if(r.key==='lastRemindedDate') S.lastRemindedDate=r.value;
   });
 }
 
@@ -242,6 +262,7 @@ function getFiltered(){
 // ─────────────────────────────────────────
 function renderAll(){
   updateBadges();
+  updatePracticeBadges();
   renderCategories();
   updateCatSelects();
   updateAppendTargetSelect();
@@ -1699,10 +1720,532 @@ document.addEventListener('keydown', e => {
     if($('editModalBackdrop').classList.contains('open')) closeEditModal();
     if($('folderModalBackdrop')?.classList.contains('open')) closeFolderModal();
     if($('settingsPanel').classList.contains('open')) closeSettings();
+    if($('practiceModalBackdrop')?.classList.contains('open')) closePracticeModal();
+    if($('reminderNoticeBackdrop')?.classList.contains('open')) closeReminderNotice();
   }
 });
 
 // ─────────────────────────────────────────
+
+// ─────────────────────────────────────────
+// Practice Checkin & Daily Reminder Functions
+// ─────────────────────────────────────────
+
+function getLocalDateStr(dateObj = new Date()) {
+  const y = dateObj.getFullYear();
+  const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const d = String(dateObj.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function calculatePracticeStats() {
+  const datesSet = new Set(S.checkins.map(c => c.date));
+  const totalDays = datesSet.size;
+  const totalMinutes = S.checkins.reduce((acc, c) => acc + (Number(c.duration) || 0), 0);
+
+  // Current Streak Calculation
+  const todayStr = getLocalDateStr(new Date());
+  const yesterday = new Date(Date.now() - 86400000);
+  const yesterdayStr = getLocalDateStr(yesterday);
+
+  let streak = 0;
+  if (datesSet.has(todayStr)) {
+    streak = 1;
+    let checkDate = new Date(Date.now() - 86400000);
+    while (datesSet.has(getLocalDateStr(checkDate))) {
+      streak++;
+      checkDate = new Date(checkDate.getTime() - 86400000);
+    }
+  } else if (datesSet.has(yesterdayStr)) {
+    streak = 1;
+    let checkDate = new Date(Date.now() - 2 * 86400000);
+    while (datesSet.has(getLocalDateStr(checkDate))) {
+      streak++;
+      checkDate = new Date(checkDate.getTime() - 86400000);
+    }
+  }
+
+  // Max Streak
+  let maxStreak = 0;
+  if (datesSet.size > 0) {
+    const sortedDates = Array.from(datesSet).sort();
+    let currentSeq = 1;
+    maxStreak = 1;
+    for (let i = 1; i < sortedDates.length; i++) {
+      const prevD = new Date(sortedDates[i - 1] + 'T00:00:00');
+      const curD = new Date(sortedDates[i] + 'T00:00:00');
+      const diff = Math.round((curD - prevD) / 86400000);
+      if (diff === 1) {
+        currentSeq++;
+        if (currentSeq > maxStreak) maxStreak = currentSeq;
+      } else if (diff > 1) {
+        currentSeq = 1;
+      }
+    }
+  }
+
+  return { streak, totalDays, totalMinutes, maxStreak };
+}
+
+function updatePracticeBadges() {
+  const { streak, totalDays, totalMinutes, maxStreak } = calculatePracticeStats();
+
+  const streakBadge = $('badgePracticeStreak');
+  if (streakBadge) {
+    streakBadge.textContent = streak > 0 ? `${streak}天` : '0';
+  }
+
+  const topbarBadge = $('topbarPracticeBadge');
+  if (topbarBadge) {
+    topbarBadge.textContent = streak > 0 ? `${streak}天` : '打卡';
+  }
+
+  const todayStr = getLocalDateStr();
+  const checkedToday = S.checkins.some(c => c.date === todayStr);
+  const topbarBtn = $('topbarPracticeBtn');
+  if (topbarBtn) {
+    if (checkedToday) {
+      topbarBtn.classList.add('is-checked');
+      topbarBtn.title = `今日已打卡（连续 ${streak} 天）`;
+    } else {
+      topbarBtn.classList.remove('is-checked');
+      topbarBtn.title = '今日练琴打卡';
+    }
+  }
+
+  if ($('statStreak')) $('statStreak').textContent = `${streak} 天`;
+  if ($('statTotalDays')) $('statTotalDays').textContent = `${totalDays} 天`;
+  if ($('statTotalTime')) {
+    $('statTotalTime').textContent = totalMinutes >= 60 ? `${(totalMinutes / 60).toFixed(1)} 小时` : `${totalMinutes} 分钟`;
+  }
+  if ($('statBestStreak')) $('statBestStreak').textContent = `${maxStreak} 天`;
+  if ($('practiceHeaderStreak')) $('practiceHeaderStreak').textContent = `🔥 连续 ${streak} 天`;
+}
+
+function updatePracticeScoreSelect() {
+  const sel = $('practiceScoreSelect');
+  if (!sel) return;
+  const curVal = sel.value;
+  sel.innerHTML = `
+    <option value="">— 选择库中乐谱或手动输入 —</option>
+    <option value="__custom__">✍️ 手动输入练习曲 / 基础练习</option>
+  `;
+  if (S.scores && S.scores.length) {
+    const optgroup = document.createElement('optgroup');
+    optgroup.label = '🎼 乐谱库曲目';
+    S.scores.slice().sort((a,b)=>a.title.localeCompare(b.title, 'zh-Hans-CN')).forEach(score => {
+      const opt = document.createElement('option');
+      opt.value = score.id;
+      const pagesCount = (score.pages && score.pages.length) ? score.pages.length : 1;
+      opt.textContent = `${score.title}${score.composer ? ' - ' + score.composer : ''}${pagesCount > 1 ? ' (' + pagesCount + '页)' : ''}`;
+      optgroup.appendChild(opt);
+    });
+    sel.appendChild(optgroup);
+  }
+  if (curVal) sel.value = curVal;
+}
+
+function openPracticeModal(presetScoreId = null) {
+  updatePracticeScoreSelect();
+  if (presetScoreId) {
+    const sel = $('practiceScoreSelect');
+    if (sel) sel.value = presetScoreId;
+    if ($('practiceCustomScore')) $('practiceCustomScore').style.display = 'none';
+  }
+
+  const todayStr = getLocalDateStr();
+  if ($('todayBannerDate')) $('todayBannerDate').textContent = todayStr;
+
+  const todayCheckins = S.checkins.filter(c => c.date === todayStr);
+  const banner = $('practiceTodayBanner');
+  if (banner) {
+    if (todayCheckins.length > 0) {
+      banner.classList.add('is-done');
+      const totalDur = todayCheckins.reduce((s, c) => s + (Number(c.duration) || 0), 0);
+      const titles = todayCheckins.map(c => c.scoreTitle).filter(Boolean).join('、');
+      if ($('todayBannerTitle')) $('todayBannerTitle').textContent = `🎉 今日已打卡 (${totalDur}分钟)`;
+      if ($('todayBannerDesc')) $('todayBannerDesc').textContent = titles ? `已练习：${titles}。继续保持绝佳状态！` : '今日已完成练琴任务，手感渐入佳境！';
+      if ($('practiceSubmitBtn')) $('practiceSubmitBtn').innerHTML = '<span>➕ 追加今日练习记录</span>';
+    } else {
+      banner.classList.remove('is-done');
+      if ($('todayBannerTitle')) $('todayBannerTitle').textContent = '今日尚未打卡';
+      if ($('todayBannerDesc')) $('todayBannerDesc').textContent = '弹奏一曲，享受音符流淌。记录今天的练琴时长与心得吧！';
+      if ($('practiceSubmitBtn')) $('practiceSubmitBtn').innerHTML = '<span>🎵 完成今日打卡</span>';
+    }
+  }
+
+  updatePracticeBadges();
+  updateReminderUIStatus();
+  setPracticeTab('checkin');
+
+  $('practiceModalBackdrop').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closePracticeModal() {
+  $('practiceModalBackdrop').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function setPracticeTab(tab) {
+  ['checkin', 'calendar', 'history'].forEach(t => {
+    const btn = $(`practiceTab${t.charAt(0).toUpperCase() + t.slice(1)}`);
+    const content = $(`practice${t.charAt(0).toUpperCase() + t.slice(1)}Content`);
+    if (btn) btn.classList.toggle('active', t === tab);
+    if (content) content.style.display = t === tab ? 'block' : 'none';
+  });
+
+  if (tab === 'calendar') {
+    renderPracticeCalendar();
+  } else if (tab === 'history') {
+    renderPracticeHistory();
+  }
+}
+
+function renderPracticeCalendar() {
+  const grid = $('calendarDaysGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+
+  if ($('calendarCurMonth')) {
+    $('calendarCurMonth').textContent = `${S.calYear}年 ${S.calMonth + 1}月`;
+  }
+
+  const firstDayIdx = new Date(S.calYear, S.calMonth, 1).getDay();
+  const totalDays = new Date(S.calYear, S.calMonth + 1, 0).getDate();
+  const prevTotalDays = new Date(S.calYear, S.calMonth, 0).getDate();
+
+  const checkinMap = new Map();
+  S.checkins.forEach(c => {
+    if (!checkinMap.has(c.date)) checkinMap.set(c.date, []);
+    checkinMap.get(c.date).push(c);
+  });
+
+  // Previous month trailing days
+  for (let i = firstDayIdx - 1; i >= 0; i--) {
+    const dayNum = prevTotalDays - i;
+    const cell = document.createElement('div');
+    cell.className = 'cal-day-cell other-month';
+    cell.innerHTML = `<span class="day-number">${dayNum}</span>`;
+    grid.appendChild(cell);
+  }
+
+  // Current month days
+  const todayStr = getLocalDateStr();
+  for (let d = 1; d <= totalDays; d++) {
+    const dStr = `${S.calYear}-${String(S.calMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const cell = document.createElement('div');
+    cell.className = 'cal-day-cell';
+    const dayCheckins = checkinMap.get(dStr) || [];
+    const hasChecked = dayCheckins.length > 0;
+    if (hasChecked) cell.classList.add('checked');
+    if (dStr === todayStr) cell.classList.add('today');
+
+    const totalDur = dayCheckins.reduce((sum, c) => sum + (Number(c.duration) || 0), 0);
+    let innerHtml = `<span class="day-number">${d}</span>`;
+    if (hasChecked) {
+      innerHtml += `<span class="day-check-badge">🎵</span>`;
+      if (totalDur > 0) {
+        innerHtml += `<span class="day-dur-tag">${totalDur}m</span>`;
+      }
+    }
+    cell.innerHTML = innerHtml;
+    cell.addEventListener('click', () => {
+      document.querySelectorAll('.cal-day-cell.selected').forEach(el => el.classList.remove('selected'));
+      cell.classList.add('selected');
+      showCalendarDayDetail(dStr, dayCheckins);
+    });
+    grid.appendChild(cell);
+  }
+
+  // Next month leading days
+  const filled = firstDayIdx + totalDays;
+  const remaining = (7 - (filled % 7)) % 7;
+  for (let i = 1; i <= remaining; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'cal-day-cell other-month';
+    cell.innerHTML = `<span class="day-number">${i}</span>`;
+    grid.appendChild(cell);
+  }
+}
+
+function showCalendarDayDetail(dateStr, checkinList) {
+  const detailEl = $('calendarDayDetail');
+  if (!detailEl) return;
+  detailEl.style.display = 'block';
+
+  if ($('dayDetailTitle')) {
+    $('dayDetailTitle').textContent = `📅 ${dateStr} 练琴明细 (${checkinList ? checkinList.length : 0}次)`;
+  }
+
+  const contentEl = $('dayDetailContent');
+  if (!contentEl) return;
+
+  if (!checkinList || !checkinList.length) {
+    contentEl.innerHTML = `<div style="padding:12px;text-align:center;color:var(--txt3);font-size:12.5px">该日暂无打卡记录</div>`;
+    return;
+  }
+
+  let html = '<div class="day-detail-items">';
+  checkinList.forEach(c => {
+    html += `
+      <div class="day-detail-row" style="background:var(--bg-glass);border:1px solid var(--border-subtle);border-radius:8px;padding:8px 12px;margin-bottom:6px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span style="font-weight:600;font-size:13px;color:var(--txt1)">🎼 ${esc(c.scoreTitle || '自选练琴')}</span>
+          <span style="font-size:12px;color:var(--primary);font-weight:600">⏱️ ${c.duration} 分钟</span>
+        </div>
+        <div style="display:flex;gap:8px;font-size:11.5px;color:var(--txt2);align-items:center;flex-wrap:wrap">
+          <span>${esc(c.mood || '😊 渐入佳境')}</span>
+          ${c.notes ? `<span style="color:var(--txt3)">· ${esc(c.notes)}</span>` : ''}
+        </div>
+      </div>
+    `;
+  });
+  html += '</div>';
+  contentEl.innerHTML = html;
+}
+
+function renderPracticeHistory() {
+  const listEl = $('practiceHistoryList');
+  if (!listEl) return;
+  if (!S.checkins || !S.checkins.length) {
+    listEl.innerHTML = `
+      <div class="empty-state" style="padding:40px 16px;text-align:center">
+        <div style="font-size:40px;margin-bottom:8px">📜</div>
+        <p style="color:var(--txt2);font-size:13.5px">暂无打卡记录</p>
+        <span style="color:var(--txt3);font-size:12px">完成每日练琴后打卡，所有轨迹都将记录在这里</span>
+      </div>
+    `;
+    return;
+  }
+
+  const sorted = [...S.checkins].sort((a,b) => (b.createdAt || 0) - (a.createdAt || 0));
+  let html = '';
+  sorted.forEach(item => {
+    const timeStr = item.createdAt ? new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+    html += `
+      <div class="practice-history-card" data-id="${item.id}">
+        <div class="history-card-header">
+          <div class="history-date-box">
+            <span class="history-date-main">${item.date}</span>
+            ${timeStr ? `<span class="history-date-time">${timeStr}</span>` : ''}
+          </div>
+          <div class="history-header-actions">
+            <span class="history-dur-badge">⏱️ ${item.duration}分钟</span>
+            <button class="icon-btn sm delete-history-btn" data-id="${item.id}" title="删除此打卡记录">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="history-card-body">
+          <div class="history-score-title">🎼 ${esc(item.scoreTitle || '练琴曲目')}</div>
+          <div class="history-mood-tag">${esc(item.mood || '😊 渐入佳境')}</div>
+          ${item.notes ? `<div class="history-notes-box">💭 ${esc(item.notes)}</div>` : ''}
+        </div>
+      </div>
+    `;
+  });
+  listEl.innerHTML = html;
+
+  listEl.querySelectorAll('.delete-history-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.id;
+      if (confirm('确定删除该条练琴打卡记录？')) {
+        await deleteCheckin(id);
+      }
+    });
+  });
+}
+
+async function deleteCheckin(id) {
+  await dbDel('checkins', id);
+  S.checkins = S.checkins.filter(c => c.id !== id);
+  updatePracticeBadges();
+  renderPracticeCalendar();
+  renderPracticeHistory();
+  toast('已删除打卡记录');
+}
+
+async function submitPracticeCheckin() {
+  let dur = S.selectedDuration;
+  if ($('customDurationWrap') && $('customDurationWrap').style.display !== 'none') {
+    const val = parseInt($('customDurationInput').value, 10);
+    if (!val || val <= 0 || val > 600) {
+      toast('请输入有效的练琴时长（1~600分钟）', 'error');
+      return;
+    }
+    dur = val;
+  }
+
+  const scoreSel = $('practiceScoreSelect');
+  let scoreId = '';
+  let scoreTitle = '日常练琴 / 基础音阶';
+
+  if (scoreSel && scoreSel.value === '__custom__') {
+    scoreTitle = $('practiceCustomScore')?.value.trim() || '自选练习曲目';
+  } else if (scoreSel && scoreSel.value) {
+    scoreId = scoreSel.value;
+    const matched = S.scores.find(s => s.id === scoreId);
+    scoreTitle = matched ? matched.title : '选定曲目';
+  }
+
+  const notes = $('practiceNotes')?.value.trim() || '';
+  const todayStr = getLocalDateStr();
+
+  const item = {
+    id: uid(),
+    date: todayStr,
+    duration: dur,
+    scoreId: scoreId,
+    scoreTitle: scoreTitle,
+    mood: S.selectedMood || '😊 渐入佳境',
+    notes: notes,
+    createdAt: Date.now()
+  };
+
+  await dbPut('checkins', item);
+  S.checkins.push(item);
+
+  playReminderChime();
+  const { streak } = calculatePracticeStats();
+  toast(`🎉 练琴打卡成功！已连续打卡 ${streak} 天`, 'success');
+
+  if ($('practiceNotes')) $('practiceNotes').value = '';
+
+  const todayCheckins = S.checkins.filter(c => c.date === todayStr);
+  const banner = $('practiceTodayBanner');
+  if (banner) {
+    banner.classList.add('is-done');
+    const totalDur = todayCheckins.reduce((s, c) => s + (Number(c.duration) || 0), 0);
+    const titles = todayCheckins.map(c => c.scoreTitle).filter(Boolean).join('、');
+    if ($('todayBannerTitle')) $('todayBannerTitle').textContent = `🎉 今日已打卡 (${totalDur}分钟)`;
+    if ($('todayBannerDesc')) $('todayBannerDesc').textContent = titles ? `已练习：${titles}。继续保持绝佳状态！` : '今日已完成练琴任务，手感渐入佳境！';
+    if ($('practiceSubmitBtn')) $('practiceSubmitBtn').innerHTML = '<span>➕ 追加今日练习记录</span>';
+  }
+
+  updatePracticeBadges();
+}
+
+// ─────────────────────────────────────────
+// Practice Reminder System
+// ─────────────────────────────────────────
+
+function updateReminderUIStatus() {
+  if ($('settingReminderToggle')) $('settingReminderToggle').checked = S.reminderEnabled;
+  if ($('settingReminderTime')) $('settingReminderTime').value = S.reminderTime || '20:00';
+  if ($('settingReminderText')) $('settingReminderText').value = S.reminderText || '🎹 该练琴啦！保持指尖记忆，今天也要坚持弹奏哦～';
+  if ($('reminderConfigFields')) $('reminderConfigFields').style.display = S.reminderEnabled ? 'block' : 'none';
+
+  if ($('modalReminderStateText')) {
+    $('modalReminderStateText').textContent = S.reminderEnabled ? `每日 ${S.reminderTime}` : '未开启';
+  }
+
+  if ($('notifyPermHint')) {
+    if (!('Notification' in window)) {
+      $('notifyPermHint').textContent = 'ℹ️ 当前浏览器环境仅支持应用内提醒与琴声';
+    } else if (Notification.permission === 'granted') {
+      $('notifyPermHint').textContent = '✅ 系统通知权限已开启';
+    } else if (Notification.permission === 'denied') {
+      $('notifyPermHint').textContent = '⚠️ 系统通知已被禁止，仍可通过应用内和弦弹窗提醒';
+    } else {
+      $('notifyPermHint').textContent = 'ℹ️ 点击按钮授权系统通知，防漏打卡';
+    }
+  }
+}
+
+async function requestNotificationPermission(showFeedback = true) {
+  if (!('Notification' in window)) {
+    if (showFeedback) toast('当前环境不支持 Web Notification，将使用应用内弹窗与琴声', 'info');
+    updateReminderUIStatus();
+    return;
+  }
+  try {
+    const perm = await Notification.requestPermission();
+    if (perm === 'granted') {
+      if (showFeedback) toast('系统通知权限已开启！', 'success');
+    } else if (perm === 'denied') {
+      if (showFeedback) toast('系统通知被拒绝，仍可通过应用内提醒接收通知', 'info');
+    }
+  } catch(e) {
+    console.warn(e);
+  }
+  updateReminderUIStatus();
+}
+
+function playReminderChime() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    if (ctx.state === 'suspended') ctx.resume();
+
+    const notes = [523.25, 659.25, 783.99, 1046.50];
+    const now = ctx.currentTime;
+
+    notes.forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, now + idx * 0.08);
+
+      gain.gain.setValueAtTime(0.001, now + idx * 0.08);
+      gain.gain.exponentialRampToValueAtTime(0.25, now + idx * 0.08 + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.08 + 1.2);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now + idx * 0.08);
+      osc.stop(now + idx * 0.08 + 1.3);
+    });
+  } catch(e) {
+    console.warn('Audio chime failed:', e);
+  }
+}
+
+function checkPracticeReminder() {
+  if (!S.reminderEnabled) return;
+  if (S.snoozeUntil && Date.now() < S.snoozeUntil) return;
+
+  const now = new Date();
+  const todayStr = getLocalDateStr(now);
+  if (S.lastRemindedDate === todayStr) return;
+
+  const curTimeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  if (curTimeStr >= (S.reminderTime || '20:00')) {
+    triggerPracticeReminder(false);
+  }
+}
+
+function triggerPracticeReminder(isTest = false) {
+  if (!isTest) {
+    S.lastRemindedDate = getLocalDateStr();
+    saveSetting('lastRemindedDate', S.lastRemindedDate);
+  }
+
+  playReminderChime();
+
+  const msg = S.reminderText || '🎹 该练琴啦！保持指尖记忆，今天也要坚持弹奏哦～';
+
+  if ('Notification' in window && Notification.permission === 'granted') {
+    try {
+      new Notification('🎹 练琴提醒', {
+        body: msg,
+        icon: 'icons/icon-192.png'
+      });
+    } catch(e) {}
+  }
+
+  if ($('reminderNoticeMsg')) $('reminderNoticeMsg').textContent = msg;
+  if ($('reminderNoticeBackdrop')) $('reminderNoticeBackdrop').classList.add('open');
+}
+
+function closeReminderNotice() {
+  if ($('reminderNoticeBackdrop')) $('reminderNoticeBackdrop').classList.remove('open');
+}
+
 // Bind all events
 // ─────────────────────────────────────────
 function bindEvents(){
@@ -1885,7 +2428,8 @@ function bindEvents(){
     if(!confirm('确定清空所有乐谱和分类？此操作不可恢复！')) return;
     for(const s of S.scores) await dbDel('scores',s.id);
     for(const c of S.categories) await dbDel('categories',c.id);
-    S.scores=[]; S.categories=[];
+    for(const k of S.checkins) await dbDel('checkins',k.id);
+    S.scores=[]; S.categories=[]; S.checkins=[];
     await removeBgImage();
     closeSettings(); renderAll();
     toast('已清空所有数据');
@@ -1941,6 +2485,140 @@ function bindEvents(){
   $('viewerBackdrop').addEventListener('click',e=>{
     if(e.target===$('viewerBackdrop')) closeViewer();
   });
+
+  // Practice Check-in & Daily Reminder
+  $('navPractice')?.addEventListener('click', () => openPracticeModal());
+  $('topbarPracticeBtn')?.addEventListener('click', () => openPracticeModal());
+  $('practiceModalClose')?.addEventListener('click', closePracticeModal);
+  $('practiceCloseBtn')?.addEventListener('click', closePracticeModal);
+  $('practiceModalBackdrop')?.addEventListener('click', e => {
+    if (e.target === $('practiceModalBackdrop')) closePracticeModal();
+  });
+
+  // Practice Tabs
+  $('practiceTabCheckin')?.addEventListener('click', () => setPracticeTab('checkin'));
+  $('practiceTabCalendar')?.addEventListener('click', () => setPracticeTab('calendar'));
+  $('practiceTabHistory')?.addEventListener('click', () => setPracticeTab('history'));
+
+  // Duration Pills
+  $('durationPillGroup')?.addEventListener('click', e => {
+    const btn = e.target.closest('.duration-pill-btn');
+    if (!btn) return;
+    document.querySelectorAll('.duration-pill-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const minVal = btn.dataset.min;
+    if (minVal === 'custom') {
+      if ($('customDurationWrap')) $('customDurationWrap').style.display = 'block';
+      $('customDurationInput')?.focus();
+    } else {
+      if ($('customDurationWrap')) $('customDurationWrap').style.display = 'none';
+      S.selectedDuration = parseInt(minVal, 10);
+    }
+  });
+
+  // Mood Pills
+  $('moodPillGroup')?.addEventListener('click', e => {
+    const btn = e.target.closest('.mood-pill-btn');
+    if (!btn) return;
+    document.querySelectorAll('.mood-pill-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    S.selectedMood = btn.dataset.mood;
+  });
+
+  // Score select change
+  $('practiceScoreSelect')?.addEventListener('change', e => {
+    const isCustom = e.target.value === '__custom__';
+    if ($('practiceCustomScore')) {
+      $('practiceCustomScore').style.display = isCustom ? 'block' : 'none';
+      if (isCustom) $('practiceCustomScore').focus();
+    }
+  });
+
+  // Submit check-in
+  $('practiceSubmitBtn')?.addEventListener('click', submitPracticeCheckin);
+
+  // Calendar Controls
+  $('calPrevMonthBtn')?.addEventListener('click', () => {
+    S.calMonth--;
+    if (S.calMonth < 0) {
+      S.calMonth = 11;
+      S.calYear--;
+    }
+    renderPracticeCalendar();
+  });
+  $('calNextMonthBtn')?.addEventListener('click', () => {
+    S.calMonth++;
+    if (S.calMonth > 11) {
+      S.calMonth = 0;
+      S.calYear++;
+    }
+    renderPracticeCalendar();
+  });
+  $('closeDayDetailBtn')?.addEventListener('click', () => {
+    if ($('calendarDayDetail')) $('calendarDayDetail').style.display = 'none';
+  });
+
+  // Settings reminder link in practice modal
+  $('modalOpenReminderBtn')?.addEventListener('click', () => {
+    closePracticeModal();
+    openSettings();
+    $('settingReminderToggle')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+
+  // Reminder Notice Popup Buttons
+  $('reminderGoPracticeBtn')?.addEventListener('click', () => {
+    closeReminderNotice();
+    if (S.scores.length > 0) openViewer(0, S.scores, 0);
+  });
+  $('reminderCheckinNowBtn')?.addEventListener('click', () => {
+    closeReminderNotice();
+    openPracticeModal();
+  });
+  $('reminderDismissBtn')?.addEventListener('click', () => {
+    closeReminderNotice();
+    S.snoozeUntil = Date.now() + 15 * 60 * 1000;
+    toast('已延后 15 分钟提醒');
+  });
+  $('reminderNoticeBackdrop')?.addEventListener('click', e => {
+    if (e.target === $('reminderNoticeBackdrop')) closeReminderNotice();
+  });
+
+  // Reminder Settings Panel Controls
+  $('settingReminderToggle')?.addEventListener('change', async e => {
+    S.reminderEnabled = e.target.checked;
+    await saveSetting('reminderEnabled', S.reminderEnabled);
+    if ($('reminderConfigFields')) $('reminderConfigFields').style.display = S.reminderEnabled ? 'block' : 'none';
+    updateReminderUIStatus();
+    if (S.reminderEnabled) {
+      toast('已开启每日练琴提醒 (' + S.reminderTime + ')', 'success');
+      requestNotificationPermission(false);
+    } else {
+      toast('已关闭练琴提醒');
+    }
+  });
+  $('settingReminderTime')?.addEventListener('change', async e => {
+    S.reminderTime = e.target.value || '20:00';
+    await saveSetting('reminderTime', S.reminderTime);
+    updateReminderUIStatus();
+    toast('提醒时间已更新为 ' + S.reminderTime);
+  });
+  $('settingReminderText')?.addEventListener('input', async e => {
+    S.reminderText = e.target.value.trim() || '🎹 该练琴啦！保持指尖记忆，今天也要坚持弹奏哦～';
+    await saveSetting('reminderText', S.reminderText);
+  });
+  $('settingTestReminderBtn')?.addEventListener('click', () => {
+    triggerPracticeReminder(true);
+  });
+  $('settingNotifyPermBtn')?.addEventListener('click', () => {
+    requestNotificationPermission(true);
+  });
+
+  // Viewer checkin button
+  $('viewerCheckinBtn')?.addEventListener('click', () => {
+    const curScore = S.viewerList[S.viewerIdx];
+    openPracticeModal(curScore ? curScore.id : null);
+  });
+
 }
 
 // ─────────────────────────────────────────
@@ -2036,15 +2714,26 @@ async function boot(){
   try{
     await initDB();
     await loadSettings();
-    const [scores,cats]=await Promise.all([dbAll('scores'),dbAll('categories')]);
-    S.scores=scores; S.categories=cats;
+    const [scores,cats,checkins]=await Promise.all([
+      dbAll('scores'),
+      dbAll('categories'),
+      dbAll('checkins').catch(()=>[])
+    ]);
+    S.scores=scores; S.categories=cats; S.checkins=checkins || [];
     if(!scores.length && !cats.length){
       await seedInitialDemoData();
     }
     applyTheme(S.theme);
     applyBackground();
     bindEvents();
+    updateReminderUIStatus();
     renderAll();
+    // Daily reminder periodic checker
+    setInterval(checkPracticeReminder, 30000);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') checkPracticeReminder();
+    });
+    setTimeout(checkPracticeReminder, 2000);
     if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
   } catch(err){ console.error(err); toast('初始化失败，请刷新重试','error'); }
 }

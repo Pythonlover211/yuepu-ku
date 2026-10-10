@@ -2,7 +2,7 @@
    Service Worker — 乐谱库 PWA
    离线缓存 App Shell
    ============================================= */
-const CACHE_NAME = 'music-score-v3';
+const CACHE_NAME = 'music-score-v4';
 const SHELL_ASSETS = [
   './',
   './index.html',
@@ -65,3 +65,17 @@ self.addEventListener('fetch', (e) => {
     );
   }
 });
+
+// Notification click: focus or open window
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  e.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if ('focus' in client) return client.focus();
+      }
+      if (clients.openWindow) return clients.openWindow('./');
+    })
+  );
+});
+

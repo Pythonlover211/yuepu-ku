@@ -80,6 +80,11 @@
         <span class="nav-item-text">最近</span>
         <span class="badge" id="badgeRecent">0</span>
       </button>
+      <button class="nav-item" id="navPractice">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <span class="nav-item-text">练琴打卡</span>
+        <span class="badge" id="badgePracticeStreak">🔥 0天</span>
+      </button>
     </div>
 
     <!-- Categories -->
@@ -120,6 +125,11 @@
       </div>
     </div>
     <div class="topbar-right">
+      <button class="practice-topbar-btn" id="topbarPracticeBtn" title="每日练琴打卡与统计">
+        <span class="pt-icon">🎹</span>
+        <span class="pt-text" id="topbarPracticeText">今日打卡</span>
+        <span class="pt-badge" id="topbarPracticeBadge">🔥 0天</span>
+      </button>
       <div class="view-toggle">
         <button class="view-btn active" id="viewGrid" title="网格">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/><rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/><rect x="3" y="14" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/><rect x="14" y="14" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/></svg>
@@ -249,6 +259,42 @@
         <button class="card-size-btn active" data-size="medium">中</button>
         <button class="card-size-btn" data-size="small">小</button>
         <button class="card-size-btn" data-size="large">大</button>
+      </div>
+    </div>
+
+    <!-- Reminder Settings -->
+    <div class="settings-section">
+      <h3 class="settings-section-title">⏰ 每日练琴提醒</h3>
+      <div class="settings-reminder-box">
+        <div class="reminder-switch-row">
+          <div>
+            <div class="reminder-switch-title">开启练琴提醒</div>
+            <div class="reminder-switch-sub">预设时间准时提醒您练琴打卡</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="settingReminderToggle" />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="reminder-config-fields" id="reminderConfigFields" style="margin-top:12px">
+          <div class="form-group" style="margin-bottom:10px">
+            <label for="settingReminderTime">每日提醒时间</label>
+            <input type="time" id="settingReminderTime" value="20:00" />
+          </div>
+          <div class="form-group" style="margin-bottom:10px">
+            <label for="settingReminderText">提醒文案</label>
+            <input type="text" id="settingReminderText" value="🎹 该练琴啦！保持指尖记忆，今天也要坚持弹奏哦～" maxlength="60" />
+          </div>
+          <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+            <button type="button" class="btn-secondary sm" id="settingTestReminderBtn">
+              🔔 测试提醒效果
+            </button>
+            <button type="button" class="btn-secondary sm" id="settingNotifyPermBtn">
+              🛡️ 授权系统通知
+            </button>
+          </div>
+          <div id="notifyPermHint" style="font-size:11px;color:var(--txt3);margin-top:6px"></div>
+        </div>
       </div>
     </div>
 
@@ -429,6 +475,10 @@
       </div>
     </div>
     <div class="viewer-actions">
+      <!-- 记入练琴打卡 -->
+      <button class="viewer-btn" id="viewerCheckinBtn" title="记入今日练琴打卡">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M9 11l3 3L22 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
       <!-- 页面缩略图目录 -->
       <button class="viewer-btn" id="viewerThumbsBtn" title="查看所有页面缩略图">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="14" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/></svg>
@@ -664,6 +714,187 @@
     </div>
     <div class="modal-footer">
       <button class="btn-secondary" id="folderCloseBtn">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- ░░░ PRACTICE & CHECKIN MODAL (每日打卡与练琴中心) ░░░ -->
+<div class="modal-backdrop" id="practiceModalBackdrop">
+  <div class="modal modal-lg" id="practiceModal">
+    <div class="modal-header">
+      <div class="practice-header-titles">
+        <h2>🎹 每日练琴打卡</h2>
+        <span class="practice-badge" id="practiceHeaderStreak">🔥 连续 0 天</span>
+      </div>
+      <button class="icon-btn" id="practiceModalClose">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <!-- Stats Row -->
+      <div class="practice-stats-grid">
+        <div class="practice-stat-card">
+          <div class="stat-icon">🔥</div>
+          <div class="stat-meta">
+            <span class="stat-val" id="statStreak">0 天</span>
+            <span class="stat-label">当前连续打卡</span>
+          </div>
+        </div>
+        <div class="practice-stat-card">
+          <div class="stat-icon">📅</div>
+          <div class="stat-meta">
+            <span class="stat-val" id="statTotalDays">0 天</span>
+            <span class="stat-label">累计打卡天数</span>
+          </div>
+        </div>
+        <div class="practice-stat-card">
+          <div class="stat-icon">⏱️</div>
+          <div class="stat-meta">
+            <span class="stat-val" id="statTotalTime">0 分钟</span>
+            <span class="stat-label">累计练琴时长</span>
+          </div>
+        </div>
+        <div class="practice-stat-card">
+          <div class="stat-icon">🏆</div>
+          <div class="stat-meta">
+            <span class="stat-val" id="statBestStreak">0 天</span>
+            <span class="stat-label">历史最长连续</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Practice Tab Bar (今日打卡 / 打卡日历 / 练琴明细) -->
+      <div class="practice-tabs">
+        <button class="practice-tab-btn active" data-tab="checkin" id="practiceTabCheckin">
+          <span>✏️ 今日打卡</span>
+        </button>
+        <button class="practice-tab-btn" data-tab="calendar" id="practiceTabCalendar">
+          <span>📅 打卡日历</span>
+        </button>
+        <button class="practice-tab-btn" data-tab="history" id="practiceTabHistory">
+          <span>📜 练琴明细</span>
+        </button>
+      </div>
+
+      <!-- Tab 1: Checkin Form -->
+      <div class="practice-tab-content active" id="practiceCheckinContent">
+        <div class="practice-form-card">
+          <div class="practice-today-banner" id="practiceTodayBanner">
+            <div class="today-banner-text">
+              <h3 id="todayBannerTitle">今日尚未打卡</h3>
+              <p id="todayBannerDesc">弹奏一曲，享受音符流淌。记录今天的练琴时长与心得吧！</p>
+            </div>
+            <div class="today-banner-date" id="todayBannerDate">2026-10-10</div>
+          </div>
+
+          <!-- Duration Selector -->
+          <div class="form-group" style="margin-top:16px">
+            <label>⏱️ 今日练琴时长</label>
+            <div class="duration-pill-group" id="durationPillGroup">
+              <button type="button" class="duration-pill-btn" data-min="15">15分钟</button>
+              <button type="button" class="duration-pill-btn active" data-min="30">30分钟</button>
+              <button type="button" class="duration-pill-btn" data-min="45">45分钟</button>
+              <button type="button" class="duration-pill-btn" data-min="60">60分钟</button>
+              <button type="button" class="duration-pill-btn" data-min="90">90分钟</button>
+              <button type="button" class="duration-pill-btn" data-min="custom">自定义</button>
+            </div>
+            <div class="custom-duration-wrap" id="customDurationWrap" style="display:none;margin-top:8px">
+              <input type="number" id="customDurationInput" min="1" max="600" placeholder="请输入练琴时长 (分钟)" />
+            </div>
+          </div>
+
+          <!-- Score / Repertoire Selector -->
+          <div class="form-group">
+            <label for="practiceScoreSelect">🎼 练习乐谱 / 曲目 (可选)</label>
+            <select id="practiceScoreSelect">
+              <option value="">— 选择库中乐谱或手动填写 —</option>
+            </select>
+            <input type="text" id="practiceCustomScore" placeholder="或手动输入练习内容，如：拜厄 / 车尔尼599 / 哈农音阶 / 自选练习曲" style="margin-top:6px;display:none" maxlength="50" />
+          </div>
+
+          <!-- Mood / Feel -->
+          <div class="form-group">
+            <label>💭 今日练琴手感 / 状态</label>
+            <div class="mood-pill-group" id="moodPillGroup">
+              <button type="button" class="mood-pill-btn active" data-mood="😊 渐入佳境">😊 渐入佳境</button>
+              <button type="button" class="mood-pill-btn" data-mood="🔥 手感极佳">🔥 手感极佳</button>
+              <button type="button" class="mood-pill-btn" data-mood="💪 攻克难点">💪 攻克难点</button>
+              <button type="button" class="mood-pill-btn" data-mood="🎶 轻松愉快">🎶 轻松愉快</button>
+              <button type="button" class="mood-pill-btn" data-mood="☕ 舒缓日常">☕ 舒缓日常</button>
+            </div>
+          </div>
+
+          <!-- Notes -->
+          <div class="form-group">
+            <label for="practiceNotes">📝 今日练琴心得 / 难点标记</label>
+            <textarea id="practiceNotes" rows="2" placeholder="记录今天练习的小节、速度踏板要领、难点突破或指法体会…" maxlength="200"></textarea>
+          </div>
+
+          <div class="practice-submit-row">
+            <button type="button" class="btn-primary" id="practiceSubmitBtn" style="width:100%;padding:12px;font-size:14.5px">
+              <span>🎵 完成今日打卡</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 2: Calendar -->
+      <div class="practice-tab-content" id="practiceCalendarContent" style="display:none">
+        <div class="practice-calendar-wrap">
+          <div class="calendar-header-bar">
+            <button class="icon-btn sm" id="calPrevMonthBtn" title="上一月">‹</button>
+            <span class="calendar-cur-month" id="calendarCurMonth">2026年 10月</span>
+            <button class="icon-btn sm" id="calNextMonthBtn" title="下一月">›</button>
+          </div>
+          <div class="calendar-weekdays">
+            <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
+          </div>
+          <div class="calendar-days-grid" id="calendarDaysGrid"></div>
+        </div>
+        <div class="calendar-day-detail" id="calendarDayDetail" style="display:none;margin-top:12px">
+          <div class="day-detail-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <span id="dayDetailTitle" style="font-weight:600;font-size:13px;color:var(--txt1)">2026-10-10 练琴明细</span>
+            <button class="icon-btn sm" id="closeDayDetailBtn">✕</button>
+          </div>
+          <div id="dayDetailContent"></div>
+        </div>
+      </div>
+
+      <!-- Tab 3: History List -->
+      <div class="practice-tab-content" id="practiceHistoryContent" style="display:none">
+        <div class="practice-history-list" id="practiceHistoryList"></div>
+      </div>
+    </div>
+    <div class="modal-footer" style="justify-content:space-between;align-items:center">
+      <div class="reminder-quick-status" id="modalReminderStatus" style="font-size:12px;color:var(--txt3)">
+        <span>⏰ 每日提醒：</span><span id="modalReminderStateText" style="color:var(--txt2)">未开启</span>
+        <button type="button" class="link-btn" id="modalOpenReminderBtn" style="margin-left:6px;font-size:12px">设置</button>
+      </div>
+      <button class="btn-secondary" id="practiceCloseBtn">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- ░░░ DAILY REMINDER NOTICE POPUP ░░░ -->
+<div class="modal-backdrop" id="reminderNoticeBackdrop">
+  <div class="modal modal-sm" id="reminderNoticeModal" style="text-align:center">
+    <div class="modal-body" style="padding:28px 22px">
+      <div class="reminder-pop-icon" style="font-size:42px;margin-bottom:10px">🎹</div>
+      <h2 style="font-size:18px;margin-bottom:8px;color:var(--txt1)">每日练琴时间到啦！</h2>
+      <p id="reminderNoticeMsg" style="font-size:13.5px;color:var(--txt2);line-height:1.5;margin-bottom:20px">
+        该练琴啦！保持指尖记忆，今天也要坚持弹奏哦～
+      </p>
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <button class="btn-primary" id="reminderGoPracticeBtn" style="width:100%;padding:10px">
+          🎵 立即选谱练琴
+        </button>
+        <button class="btn-secondary" id="reminderCheckinNowBtn" style="width:100%;padding:10px">
+          ✏️ 打开练琴打卡
+        </button>
+        <button class="link-btn" id="reminderDismissBtn" style="margin-top:4px;font-size:12.5px;color:var(--txt3)">
+          稍后练习 / 知道了
+        </button>
+      </div>
     </div>
   </div>
 </div>
