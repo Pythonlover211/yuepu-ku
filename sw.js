@@ -2,11 +2,13 @@
    Service Worker — 乐谱库 PWA
    离线缓存 App Shell
    ============================================= */
-const CACHE_NAME = 'music-score-v4';
+const CACHE_NAME = 'music-score-v6';
 const SHELL_ASSETS = [
   './',
   './index.html',
   './style.css',
+  './supabase-client.js',
+  './metronome.js',
   './app.js',
   './manifest.json',
   'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap',

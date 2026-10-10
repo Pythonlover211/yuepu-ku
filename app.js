@@ -2710,6 +2710,759 @@ async function seedInitialDemoData(){
   S.scores.push(singleScore);
 }
 
+// ─────────────────────────────────────────
+// 🔐 CLOUD AUTH & SYNC CONTROLLER
+// ─────────────────────────────────────────
+
+let authCurrentTab = 'login'; // 'login' | 'register'
+
+function initAuthAndSync() {
+  if (!window.SupabaseSyncService) return;
+
+  const sync = window.SupabaseSyncService;
+
+  // Listen to state changes
+  sync.onStateChange(renderAuthStatus);
+
+  // Trigger initial UI render
+  renderAuthStatus({
+    isConfigured: sync.isConfigured(),
+    isLoggedIn: sync.isLoggedIn(),
+    user: sync.getUser(),
+    isSyncing: sync.isSyncing,
+    lastSyncTime: sync.getLastSyncTime()
+  });
+
+  // Topbar & Sidebar triggers
+  if ($('topbarAuthBtn')) {
+    $('topbarAuthBtn').addEventListener('click', openAuthOrProfileModal);
+  }
+  if ($('sidebarUserCard')) {
+    $('sidebarUserCard').addEventListener('click', openAuthOrProfileModal);
+  }
+
+  // Auth modal close
+  if ($('authCloseBtn')) $('authCloseBtn').addEventListener('click', closeAuthModal);
+  if ($('authBackdrop')) {
+    $('authBackdrop').addEventListener('click', (e) => {
+      if (e.target === $('authBackdrop')) closeAuthModal();
+    });
+  }
+
+  // Profile modal close
+  if ($('userProfileCloseBtn')) $('userProfileCloseBtn').addEventListener('click', closeUserProfileModal);
+  if ($('userProfileBackdrop')) {
+    $('userProfileBackdrop').addEventListener('click', (e) => {
+      if (e.target === $('userProfileBackdrop')) closeUserProfileModal();
+    });
+  }
+
+  // Data merge modal close
+  if ($('mergeDismissBtn')) $('mergeDismissBtn').addEventListener('click', closeDataMergeModal);
+  if ($('dataMergeBackdrop')) {
+    $('dataMergeBackdrop').addEventListener('click', (e) => {
+      if (e.target === $('dataMergeBackdrop')) closeDataMergeModal();
+    });
+  }
+
+  // Auth Tabs
+  if ($('authTabLogin')) {
+    $('authTabLogin').addEventListener('click', () => switchAuthTab('login'));
+  }
+  if ($('authTabRegister')) {
+    $('authTabRegister').addEventListener('click', () => switchAuthTab('register'));
+  }
+
+  // Auth Submit
+  if ($('authSubmitBtn')) {
+    $('authSubmitBtn').addEventListener('click', handleAuthSubmit);
+  }
+
+  // Config Collapsible
+  if ($('authToggleConfigBtn')) {
+    $('authToggleConfigBtn').addEventListener('click', () => {
+      const wrap = $('authConfigWrap');
+      if (wrap) {
+        wrap.style.display = wrap.style.display === 'none' ? 'block' : 'none';
+        if (wrap.style.display === 'block') fillConfigInputs();
+      }
+    });
+  }
+  if ($('openConfigFromProfileBtn')) {
+    $('openConfigFromProfileBtn').addEventListener('click', () => {
+      closeUserProfileModal();
+      openAuthModal();
+      const wrap = $('authConfigWrap');
+      if (wrap) {
+        wrap.style.display = 'block';
+        fillConfigInputs();
+      }
+    });
+  }
+
+  // Save Config
+  if ($('cfgSaveBtn')) {
+    $('cfgSaveBtn').addEventListener('click', () => {
+      const url = $('cfgSupabaseUrl') ? $('cfgSupabaseUrl').value : '';
+      const key = $('cfgSupabaseKey') ? $('cfgSupabaseKey').value : '';
+      sync.saveConfig(url, key);
+      toast('✅ 云服务配置已保存！', 'success');
+      setAuthNotice('');
+    });
+  }
+
+  // Reset Config
+  if ($('cfgResetBtn')) {
+    $('cfgResetBtn').addEventListener('click', () => {
+      localStorage.removeItem('musicscore_supabase_config');
+      sync.config = sync.loadConfig();
+      fillConfigInputs();
+      toast('已重置为默认配置', 'info');
+    });
+  }
+
+  // Profile actions
+  if ($('logoutBtn')) {
+    $('logoutBtn').addEventListener('click', async () => {
+      await sync.signOut();
+      closeUserProfileModal();
+      toast('🚪 已退出登录，当前为本地离线模式', 'info');
+    });
+  }
+
+  if ($('syncNowBtn')) {
+    $('syncNowBtn').addEventListener('click', () => performFullSync(false));
+  }
+
+  if ($('syncPushLocalBtn')) {
+    $('syncPushLocalBtn').addEventListener('click', async () => {
+      if (!sync.isLoggedIn()) { toast('请先登录', 'info'); return; }
+      try {
+        toast('⬆️ 正在上传全部本地乐谱与打卡数据...', 'info');
+        for (const s of S.scores) await sync.uploadSingleScoreToCloud(s);
+        for (const c of S.checkins) await sync.uploadSingleCheckinToCloud(c);
+        toast('🎉 本地数据已全部上传并合并到云端！', 'success');
+        sync.setLastSyncTime(new Date().toISOString());
+        renderAuthStatus();
+      } catch (err) {
+        toast(`上传失败: ${err.message}`, 'error');
+      }
+    });
+  }
+
+  if ($('syncPullCloudBtn')) {
+    $('syncPullCloudBtn').addEventListener('click', async () => {
+      if (!sync.isLoggedIn()) { toast('请先登录', 'info'); return; }
+      try {
+        toast('⬇️ 正在从云端拉取乐谱与打卡数据...', 'info');
+        await performFullSync(false);
+      } catch (err) {
+        toast(`拉取失败: ${err.message}`, 'error');
+      }
+    });
+  }
+
+  // Merge modal actions
+  if ($('mergeUploadNowBtn')) {
+    $('mergeUploadNowBtn').addEventListener('click', async () => {
+      closeDataMergeModal();
+      await performFullSync(false);
+    });
+  }
+  if ($('mergePullCloudOnlyBtn')) {
+    $('mergePullCloudOnlyBtn').addEventListener('click', async () => {
+      closeDataMergeModal();
+      try {
+        toast('⬇️ 正在从云端拉取数据...', 'info');
+        const cloudScores = await sync.fetchCloudScores();
+        for (const s of cloudScores) await dbPut('scores', s);
+        S.scores = await dbAll('scores');
+        renderScores();
+        renderSidebar();
+        toast('云端数据拉取成功！', 'success');
+      } catch (err) {
+        toast(`拉取失败: ${err.message}`, 'error');
+      }
+    });
+  }
+
+  // Auto-sync in background on load if logged in
+  if (sync.isLoggedIn()) {
+    setTimeout(() => performFullSync(true), 3000);
+  }
+}
+
+function openAuthOrProfileModal() {
+  const sync = window.SupabaseSyncService;
+  if (sync && sync.isLoggedIn()) {
+    openUserProfileModal();
+  } else {
+    openAuthModal();
+  }
+}
+
+function openAuthModal() {
+  fillConfigInputs();
+  setAuthNotice('');
+  if ($('authBackdrop')) $('authBackdrop').classList.add('open');
+}
+
+function closeAuthModal() {
+  if ($('authBackdrop')) $('authBackdrop').classList.remove('open');
+}
+
+function openUserProfileModal() {
+  renderAuthStatus();
+  if ($('userProfileBackdrop')) $('userProfileBackdrop').classList.add('open');
+}
+
+function closeUserProfileModal() {
+  if ($('userProfileBackdrop')) $('userProfileBackdrop').classList.remove('open');
+}
+
+function openDataMergeModal() {
+  const scoreCount = S.scores ? S.scores.length : 0;
+  const chkCount = S.checkins ? S.checkins.length : 0;
+  if ($('dataMergeDesc')) {
+    $('dataMergeDesc').textContent = `当前设备上有 ${scoreCount} 首本地乐谱与 ${chkCount} 条练琴打卡记录。是否一键上传合并到您的云端账号，实现跨设备共享？`;
+  }
+  if ($('dataMergeBackdrop')) $('dataMergeBackdrop').classList.add('open');
+}
+
+function closeDataMergeModal() {
+  if ($('dataMergeBackdrop')) $('dataMergeBackdrop').classList.remove('open');
+}
+
+function switchAuthTab(tab) {
+  authCurrentTab = tab;
+  setAuthNotice('');
+  if (tab === 'login') {
+    if ($('authTabLogin')) $('authTabLogin').classList.add('active');
+    if ($('authTabRegister')) $('authTabRegister').classList.remove('active');
+    if ($('authModalTitle')) $('authModalTitle').textContent = '云端账号登录';
+    if ($('authSubmitBtnText')) $('authSubmitBtnText').textContent = '立即登录';
+    if ($('authNicknameGroup')) $('authNicknameGroup').style.display = 'none';
+    if ($('authConfirmPasswordGroup')) $('authConfirmPasswordGroup').style.display = 'none';
+  } else {
+    if ($('authTabLogin')) $('authTabLogin').classList.remove('active');
+    if ($('authTabRegister')) $('authTabRegister').classList.add('active');
+    if ($('authModalTitle')) $('authModalTitle').textContent = '注册新账号';
+    if ($('authSubmitBtnText')) $('authSubmitBtnText').textContent = '立即注册';
+    if ($('authNicknameGroup')) $('authNicknameGroup').style.display = 'block';
+    if ($('authConfirmPasswordGroup')) $('authConfirmPasswordGroup').style.display = 'block';
+  }
+}
+
+function setAuthNotice(msg, type = 'error') {
+  const box = $('authNoticeBox');
+  if (!box) return;
+  if (!msg) {
+    box.style.display = 'none';
+    box.textContent = '';
+    return;
+  }
+  box.className = `auth-notice-box ${type}`;
+  box.textContent = msg;
+  box.style.display = 'block';
+}
+
+function fillConfigInputs() {
+  const sync = window.SupabaseSyncService;
+  if (!sync) return;
+  if ($('cfgSupabaseUrl')) $('cfgSupabaseUrl').value = sync.config.url || '';
+  if ($('cfgSupabaseKey')) $('cfgSupabaseKey').value = sync.config.anonKey || '';
+}
+
+async function handleAuthSubmit() {
+  const sync = window.SupabaseSyncService;
+  if (!sync) return;
+
+  if (!sync.isConfigured()) {
+    setAuthNotice('⚠️ 请先展开下方「自定义 Supabase 云服务配置」，填入 anon key 后重试');
+    if ($('authConfigWrap')) $('authConfigWrap').style.display = 'block';
+    fillConfigInputs();
+    return;
+  }
+
+  const email = $('authEmail') ? $('authEmail').value.trim() : '';
+  const password = $('authPassword') ? $('authPassword').value : '';
+  const nickname = $('authNickname') ? $('authNickname').value.trim() : '';
+  const confirmPwd = $('authConfirmPassword') ? $('authConfirmPassword').value : '';
+
+  if (!email || !password) {
+    setAuthNotice('请完整填写邮箱与密码');
+    return;
+  }
+
+  setAuthNotice('');
+  const submitBtn = $('authSubmitBtn');
+  if (submitBtn) submitBtn.disabled = true;
+
+  try {
+    if (authCurrentTab === 'login') {
+      await sync.signIn(email, password);
+      toast('🎉 登录成功！已连接云端', 'success');
+      closeAuthModal();
+
+      // Check if local scores exist -> prompt merge
+      if (S.scores && S.scores.length > 0) {
+        setTimeout(openDataMergeModal, 500);
+      } else {
+        performFullSync(false);
+      }
+    } else {
+      // Register
+      if (password.length < 6) {
+        throw new Error('密码长度不能少于 6 位');
+      }
+      if (password !== confirmPwd) {
+        throw new Error('两次输入的密码不一致');
+      }
+
+      const res = await sync.signUp(email, password, nickname);
+      if (res.autoLoggedIn) {
+        toast('🎉 注册成功！已自动登录', 'success');
+        closeAuthModal();
+        if (S.scores && S.scores.length > 0) {
+          setTimeout(openDataMergeModal, 500);
+        } else {
+          performFullSync(false);
+        }
+      } else {
+        setAuthNotice('注册成功！若您的项目开启了邮箱验证，请查收邮件确认后再登录。', 'success');
+        switchAuthTab('login');
+      }
+    }
+  } catch (err) {
+    setAuthNotice(err.message || '操作失败，请重试');
+  } finally {
+    if (submitBtn) submitBtn.disabled = false;
+  }
+}
+
+function renderAuthStatus(state) {
+  const sync = window.SupabaseSyncService;
+  const s = state || (sync ? {
+    isConfigured: sync.isConfigured(),
+    isLoggedIn: sync.isLoggedIn(),
+    user: sync.getUser(),
+    isSyncing: sync.isSyncing,
+    lastSyncTime: sync.getLastSyncTime()
+  } : {});
+
+  const isLoggedIn = Boolean(s.isLoggedIn && s.user);
+  const isSyncing = Boolean(s.isSyncing);
+
+  // Topbar
+  if ($('topbarAuthText')) {
+    if (isLoggedIn) {
+      const name = (s.user.user_metadata && s.user.user_metadata.nickname) || s.user.email.split('@')[0];
+      $('topbarAuthText').textContent = name;
+    } else {
+      $('topbarAuthText').textContent = '登录';
+    }
+  }
+
+  if ($('topbarSyncDot')) {
+    const dot = $('topbarSyncDot');
+    dot.className = 'sync-dot-badge';
+    if (isSyncing) {
+      dot.classList.add('syncing');
+      dot.title = '正在同步数据...';
+    } else if (isLoggedIn) {
+      dot.classList.add('online');
+      dot.title = '云端已同步';
+    } else {
+      dot.title = '离线模式 (未登录)';
+    }
+  }
+
+  // Sidebar
+  if ($('sidebarUserName')) {
+    if (isLoggedIn) {
+      const name = (s.user.user_metadata && s.user.user_metadata.nickname) || s.user.email.split('@')[0];
+      $('sidebarUserName').textContent = name;
+    } else {
+      $('sidebarUserName').textContent = '访客模式 (本地)';
+    }
+  }
+
+  if ($('sidebarUserAvatar')) {
+    if (isLoggedIn) {
+      const name = (s.user.user_metadata && s.user.user_metadata.nickname) || s.user.email.split('@')[0];
+      $('sidebarUserAvatar').textContent = name.charAt(0).toUpperCase();
+    } else {
+      $('sidebarUserAvatar').textContent = '👤';
+    }
+  }
+
+  if ($('sidebarSyncDot')) {
+    const dot = $('sidebarSyncDot');
+    dot.className = 'sync-dot-mini';
+    if (isSyncing) dot.classList.add('syncing');
+    else if (isLoggedIn) dot.classList.add('online');
+  }
+
+  if ($('sidebarSyncStatusText')) {
+    if (isSyncing) $('sidebarSyncStatusText').textContent = '正在同步...';
+    else if (isLoggedIn) $('sidebarSyncStatusText').textContent = '已连接云端 · 自动同步';
+    else $('sidebarSyncStatusText').textContent = '离线 · 点击登录';
+  }
+
+  // Profile Modal
+  if ($('profileName') && isLoggedIn) {
+    const name = (s.user.user_metadata && s.user.user_metadata.nickname) || s.user.email.split('@')[0];
+    $('profileName').textContent = name;
+  }
+  if ($('profileEmail') && isLoggedIn) {
+    $('profileEmail').textContent = s.user.email;
+  }
+  if ($('syncLocalCount')) {
+    $('syncLocalCount').textContent = S.scores ? S.scores.length : 0;
+  }
+  if ($('syncCheckinCount')) {
+    $('syncCheckinCount').textContent = S.checkins ? S.checkins.length : 0;
+  }
+  if ($('syncStatusText')) {
+    if (isSyncing) {
+      $('syncStatusText').textContent = '同步中';
+      $('syncStatusText').style.color = '#fbbf24';
+    } else if (isLoggedIn) {
+      $('syncStatusText').textContent = '已就绪';
+      $('syncStatusText').style.color = '#34d399';
+    } else {
+      $('syncStatusText').textContent = '离线';
+      $('syncStatusText').style.color = '#9ca3af';
+    }
+  }
+  if ($('syncLastTimeText')) {
+    const last = s.lastSyncTime || (sync ? sync.getLastSyncTime() : null);
+    if (last) {
+      const d = new Date(last);
+      $('syncLastTimeText').textContent = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    } else {
+      $('syncLastTimeText').textContent = '尚未同步';
+    }
+  }
+}
+
+async function performFullSync(silent = false) {
+  const sync = window.SupabaseSyncService;
+  if (!sync || !sync.isLoggedIn()) {
+    if (!silent) toast('请先登录云端账号', 'info');
+    return;
+  }
+  if (sync.isSyncing) return;
+
+  sync.isSyncing = true;
+  sync.notifyStateChange();
+  if (!silent) toast('🔄 正在同步云端乐谱与打卡数据...', 'info');
+
+  try {
+    // 1. 上传本地乐谱
+    for (const score of S.scores) {
+      await sync.uploadSingleScoreToCloud(score);
+    }
+    // 2. 上传本地打卡
+    for (const chk of S.checkins) {
+      await sync.uploadSingleCheckinToCloud(chk);
+    }
+
+    // 3. 拉取云端乐谱并合并
+    const cloudScores = await sync.fetchCloudScores();
+    if ($('syncCloudCount')) $('syncCloudCount').textContent = cloudScores.length;
+
+    const localScoreMap = new Map(S.scores.map(s => [String(s.id), s]));
+    let scoreChanged = false;
+    for (const cs of cloudScores) {
+      const local = localScoreMap.get(String(cs.id));
+      if (!local) {
+        localScoreMap.set(String(cs.id), cs);
+        await dbPut('scores', cs);
+        scoreChanged = true;
+      }
+    }
+    if (scoreChanged) {
+      S.scores = Array.from(localScoreMap.values());
+      renderScores();
+      renderSidebar();
+    }
+
+    // 4. 拉取云端打卡并合并
+    const cloudCheckins = await sync.fetchCloudCheckins();
+    const localCheckinMap = new Map(S.checkins.map(c => [String(c.id), c]));
+    let checkinChanged = false;
+    for (const cc of cloudCheckins) {
+      if (!localCheckinMap.has(String(cc.id))) {
+        localCheckinMap.set(String(cc.id), cc);
+        await dbPut('checkins', cc);
+        checkinChanged = true;
+      }
+    }
+    if (checkinChanged) {
+      S.checkins = Array.from(localCheckinMap.values());
+      renderPracticeCalendar();
+      renderPracticeHistory();
+    }
+
+    sync.setLastSyncTime(new Date().toISOString());
+    sync.isSyncing = false;
+    sync.notifyStateChange();
+    if (!silent) toast('🎉 云端数据同步完成！已多设备互通', 'success');
+  } catch (err) {
+    console.warn('Sync failed', err);
+    sync.isSyncing = false;
+    sync.notifyStateChange();
+    if (!silent) toast(`同步失败: ${err.message}`, 'error');
+  }
+}
+
+// ─────────────────────────────────────────
+// ⏱️ METRONOME CONTROLLER
+// ─────────────────────────────────────────
+let pendulumDirection = 1;
+
+function initMetronomeUI() {
+  if (!window.MetronomeEngine) return;
+  const metro = window.MetronomeEngine;
+
+  metro.onChange(renderMetronomeState);
+  metro.onTick(handleMetronomeTick);
+
+  // Initial render
+  renderMetronomeState({
+    bpm: metro.bpm,
+    beatsPerBar: metro.beatsPerBar,
+    subdivision: metro.subdivision,
+    timbre: metro.timbre,
+    volume: metro.volume,
+    isPlaying: metro.isPlaying,
+    tempoMarking: metro.getTempoMarking()
+  });
+
+  // Sidebar and Viewer triggers
+  if ($('navMetronome')) {
+    $('navMetronome').addEventListener('click', () => {
+      openMetronomeModal();
+      closeSidebar();
+    });
+  }
+  if ($('viewerMetronomeBtn')) {
+    $('viewerMetronomeBtn').addEventListener('click', openMetronomeModal);
+  }
+
+  // Close modal
+  if ($('metronomeCloseBtn')) $('metronomeCloseBtn').addEventListener('click', closeMetronomeModal);
+  if ($('metronomeBackdrop')) {
+    $('metronomeBackdrop').addEventListener('click', (e) => {
+      if (e.target === $('metronomeBackdrop')) closeMetronomeModal();
+    });
+  }
+
+  // Steppers & Slider
+  if ($('metroBpmSlider')) {
+    $('metroBpmSlider').addEventListener('input', (e) => metro.setBpm(e.target.value));
+  }
+  if ($('metroBpmMinus5')) $('metroBpmMinus5').addEventListener('click', () => metro.setBpm(metro.bpm - 5));
+  if ($('metroBpmMinus1')) $('metroBpmMinus1').addEventListener('click', () => metro.setBpm(metro.bpm - 1));
+  if ($('metroBpmPlus1')) $('metroBpmPlus1').addEventListener('click', () => metro.setBpm(metro.bpm + 1));
+  if ($('metroBpmPlus5')) $('metroBpmPlus5').addEventListener('click', () => metro.setBpm(metro.bpm + 5));
+
+  // Tap Tempo
+  if ($('metroTapBtn')) $('metroTapBtn').addEventListener('click', () => metro.tap());
+
+  // Preset Pills
+  const presetPills = document.querySelectorAll('.metro-preset-pill');
+  presetPills.forEach(pill => {
+    pill.addEventListener('click', () => metro.setBpm(Number(pill.dataset.bpm)));
+  });
+
+  // Beats per bar Pills
+  const beatPills = document.querySelectorAll('#metroBeatsGroup .metro-opt-pill');
+  beatPills.forEach(pill => {
+    pill.addEventListener('click', () => {
+      beatPills.forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      metro.setBeatsPerBar(Number(pill.dataset.beats));
+    });
+  });
+
+  // Subdivision Pills
+  const subPills = document.querySelectorAll('#metroSubGroup .metro-opt-pill');
+  subPills.forEach(pill => {
+    pill.addEventListener('click', () => {
+      subPills.forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      metro.setSubdivision(Number(pill.dataset.sub));
+    });
+  });
+
+  // Timbre Pills
+  const timbrePills = document.querySelectorAll('#metroTimbreGroup .metro-opt-pill');
+  timbrePills.forEach(pill => {
+    pill.addEventListener('click', () => {
+      timbrePills.forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      metro.setTimbre(pill.dataset.timbre);
+    });
+  });
+
+  // Volume
+  if ($('metroVolumeSlider')) {
+    $('metroVolumeSlider').addEventListener('input', (e) => {
+      metro.setVolume(Number(e.target.value) / 100);
+      if ($('metroVolumeValText')) $('metroVolumeValText').textContent = `${e.target.value}%`;
+    });
+  }
+  if ($('metroMuteBtn')) {
+    $('metroMuteBtn').addEventListener('click', () => {
+      if (metro.volume > 0) {
+        metro.prevVolume = metro.volume;
+        metro.setVolume(0);
+        if ($('metroVolumeSlider')) $('metroVolumeSlider').value = 0;
+        if ($('metroVolumeValText')) $('metroVolumeValText').textContent = '静音';
+        $('metroMuteBtn').textContent = '🔇';
+      } else {
+        const restore = metro.prevVolume || 0.8;
+        metro.setVolume(restore);
+        if ($('metroVolumeSlider')) $('metroVolumeSlider').value = Math.round(restore * 100);
+        if ($('metroVolumeValText')) $('metroVolumeValText').textContent = `${Math.round(restore * 100)}%`;
+        $('metroMuteBtn').textContent = '🔊';
+      }
+    });
+  }
+
+  // Play / Stop
+  if ($('metroBigPlayBtn')) $('metroBigPlayBtn').addEventListener('click', () => metro.toggle());
+  if ($('metroMiniPlayBtn')) $('metroMiniPlayBtn').addEventListener('click', () => metro.toggle());
+
+  // Minimize to floating widget
+  if ($('metroFloatBtn')) {
+    $('metroFloatBtn').addEventListener('click', () => {
+      closeMetronomeModal();
+      if ($('metroMiniWidget')) $('metroMiniWidget').style.display = 'flex';
+      toast('📌 节拍器已缩小为右下角悬浮窗', 'info');
+    });
+  }
+  if ($('metroMiniExpandBtn')) {
+    $('metroMiniExpandBtn').addEventListener('click', () => {
+      if ($('metroMiniWidget')) $('metroMiniWidget').style.display = 'none';
+      openMetronomeModal();
+    });
+  }
+}
+
+function openMetronomeModal() {
+  if ($('metronomeBackdrop')) $('metronomeBackdrop').classList.add('open');
+  if ($('metroMiniWidget')) $('metroMiniWidget').style.display = 'none';
+}
+
+function closeMetronomeModal() {
+  if ($('metronomeBackdrop')) $('metronomeBackdrop').classList.remove('open');
+  const metro = window.MetronomeEngine;
+  if (metro && metro.isPlaying) {
+    if ($('metroMiniWidget')) $('metroMiniWidget').style.display = 'flex';
+  }
+}
+
+function renderMetronomeState(state) {
+  const s = state || (window.MetronomeEngine ? {
+    bpm: window.MetronomeEngine.bpm,
+    beatsPerBar: window.MetronomeEngine.beatsPerBar,
+    subdivision: window.MetronomeEngine.subdivision,
+    timbre: window.MetronomeEngine.timbre,
+    volume: window.MetronomeEngine.volume,
+    isPlaying: window.MetronomeEngine.isPlaying,
+    tempoMarking: window.MetronomeEngine.getTempoMarking()
+  } : {});
+
+  if ($('metroBpmVal')) $('metroBpmVal').textContent = s.bpm;
+  if ($('metroBpmSlider')) $('metroBpmSlider').value = s.bpm;
+  if ($('metroTempoTerm')) $('metroTempoTerm').textContent = s.tempoMarking;
+  if ($('badgeMetronomeState')) {
+    $('badgeMetronomeState').textContent = s.isPlaying ? `▶ ${s.bpm} BPM` : `${s.bpm} BPM`;
+  }
+  if ($('metroMiniBpm')) $('metroMiniBpm').textContent = `${s.bpm} BPM`;
+
+  // Update preset pills active highlight
+  const presetPills = document.querySelectorAll('.metro-preset-pill');
+  presetPills.forEach(pill => {
+    if (Number(pill.dataset.bpm) === s.bpm) pill.classList.add('active');
+    else pill.classList.remove('active');
+  });
+
+  // Play buttons
+  const bigBtn = $('metroBigPlayBtn');
+  const miniBtn = $('metroMiniPlayBtn');
+  if (bigBtn) {
+    if (s.isPlaying) {
+      bigBtn.classList.add('playing');
+      if ($('metroPlayIcon')) $('metroPlayIcon').textContent = '⏸';
+      if ($('metroPlayLabel')) $('metroPlayLabel').textContent = '暂停节拍';
+    } else {
+      bigBtn.classList.remove('playing');
+      if ($('metroPlayIcon')) $('metroPlayIcon').textContent = '▶';
+      if ($('metroPlayLabel')) $('metroPlayLabel').textContent = '开始节拍';
+    }
+  }
+  if (miniBtn) {
+    if (s.isPlaying) {
+      miniBtn.classList.add('playing');
+      miniBtn.textContent = '⏸';
+    } else {
+      miniBtn.classList.remove('playing');
+      miniBtn.textContent = '▶';
+    }
+  }
+
+  // Dynamic beat indicator lights
+  const beatsRow = $('metroBeatsRow');
+  if (beatsRow && beatsRow.children.length !== s.beatsPerBar) {
+    beatsRow.innerHTML = '';
+    for (let i = 0; i < s.beatsPerBar; i++) {
+      const dot = document.createElement('div');
+      dot.className = `metro-beat-dot ${i === 0 && s.beatsPerBar > 1 ? 'accent' : ''}`;
+      dot.dataset.beat = i;
+      beatsRow.appendChild(dot);
+    }
+  }
+}
+
+function handleMetronomeTick(payload) {
+  // Flash beat dot
+  const beatsRow = $('metroBeatsRow');
+  if (beatsRow && payload.subIndex === 0) {
+    const dots = beatsRow.querySelectorAll('.metro-beat-dot');
+    dots.forEach((dot, idx) => {
+      if (idx === payload.beatIndex) {
+        dot.classList.add('active');
+        if (dot.classList.contains('accent')) dot.classList.add('accent');
+        setTimeout(() => dot.classList.remove('active'), 110);
+      } else {
+        dot.classList.remove('active');
+      }
+    });
+  }
+
+  // Mini widget indicator
+  const miniInd = $('metroMiniIndicator');
+  if (miniInd && payload.subIndex === 0) {
+    miniInd.className = 'metro-mini-indicator active';
+    if (payload.isDownbeat) miniInd.classList.add('accent');
+    setTimeout(() => {
+      miniInd.className = 'metro-mini-indicator';
+    }, 90);
+  }
+
+  // Pendulum swing
+  const arm = $('metroPendulumArm');
+  if (arm && payload.subIndex === 0) {
+    pendulumDirection = (pendulumDirection === 1) ? -1 : 1;
+    const angle = pendulumDirection * 26;
+    arm.style.transform = `rotate(${angle}deg)`;
+  }
+}
+
 async function boot(){
   try{
     await initDB();
@@ -2726,6 +3479,8 @@ async function boot(){
     applyTheme(S.theme);
     applyBackground();
     bindEvents();
+    initAuthAndSync();
+    initMetronomeUI();
     updateReminderUIStatus();
     renderAll();
     // Daily reminder periodic checker

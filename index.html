@@ -46,6 +46,18 @@
     </button>
   </div>
 
+  <!-- User Card in Sidebar -->
+  <div class="sidebar-user-card" id="sidebarUserCard" title="点击管理账号与云同步">
+    <div class="user-avatar" id="sidebarUserAvatar">👤</div>
+    <div class="user-info">
+      <div class="user-name" id="sidebarUserName">访客模式 (本地)</div>
+      <div class="user-status" id="sidebarUserStatus">
+        <span class="sync-dot-mini" id="sidebarSyncDot"></span>
+        <span id="sidebarSyncStatusText">离线 · 点击登录</span>
+      </div>
+    </div>
+  </div>
+
   <div class="sidebar-search">
     <div class="search-box">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" class="search-icon-svg">
@@ -84,6 +96,15 @@
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         <span class="nav-item-text">练琴打卡</span>
         <span class="badge" id="badgePracticeStreak">🔥 0天</span>
+      </button>
+      <button class="nav-item" id="navMetronome" title="练习用电子节拍器">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+          <path d="M12 2L4 20h16L12 2z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M12 18l4-10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="16" cy="8" r="1.5" fill="currentColor"/>
+        </svg>
+        <span class="nav-item-text">电子节拍器</span>
+        <span class="badge" id="badgeMetronomeState">100 BPM</span>
       </button>
     </div>
 
@@ -125,6 +146,11 @@
       </div>
     </div>
     <div class="topbar-right">
+      <button class="auth-topbar-btn" id="topbarAuthBtn" title="账号与云端同步">
+        <span class="auth-btn-icon" id="topbarAuthIcon">👤</span>
+        <span class="auth-btn-text" id="topbarAuthText">登录</span>
+        <span class="sync-dot-badge" id="topbarSyncDot" title="离线模式"></span>
+      </button>
       <button class="practice-topbar-btn" id="topbarPracticeBtn" title="每日练琴打卡与统计">
         <span class="pt-icon">🎹</span>
         <span class="pt-text" id="topbarPracticeText">今日打卡</span>
@@ -478,6 +504,10 @@
       <!-- 记入练琴打卡 -->
       <button class="viewer-btn" id="viewerCheckinBtn" title="记入今日练琴打卡">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M9 11l3 3L22 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <!-- 电子节拍器快速开关 -->
+      <button class="viewer-btn" id="viewerMetronomeBtn" title="打开电子节拍器">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2L4 20h16L12 2z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 18l4-10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="16" cy="8" r="1.5" fill="currentColor"/></svg>
       </button>
       <!-- 页面缩略图目录 -->
       <button class="viewer-btn" id="viewerThumbsBtn" title="查看所有页面缩略图">
@@ -899,9 +929,322 @@
   </div>
 </div>
 
+<!-- ░░░ CLOUD AUTH / LOGIN & REGISTER MODAL ░░░ -->
+<div class="modal-backdrop" id="authBackdrop">
+  <div class="modal modal-md" id="authModal">
+    <div class="modal-header">
+      <div>
+        <h2 id="authModalTitle">云端账号登录</h2>
+        <p class="modal-subtitle" id="authModalSubtitle">登录后跨设备实时同步乐谱、页面手写标注与练琴打卡</p>
+      </div>
+      <button class="icon-btn modal-close" id="authCloseBtn" title="关闭">✕</button>
+    </div>
+    
+    <div class="modal-body">
+      <!-- Tabs: 登录 / 注册 -->
+      <div class="practice-tabs" style="margin-bottom:16px">
+        <button type="button" class="practice-tab-btn active" id="authTabLogin">账号登录</button>
+        <button type="button" class="practice-tab-btn" id="authTabRegister">注册新账号</button>
+      </div>
+
+      <!-- Error / Notice Box -->
+      <div class="auth-notice-box" id="authNoticeBox" style="display:none"></div>
+
+      <!-- Auth Form -->
+      <form id="authForm" onsubmit="return false;">
+        <!-- Nickname (only on register) -->
+        <div class="form-group" id="authNicknameGroup" style="display:none">
+          <label for="authNickname">演奏者昵称</label>
+          <input type="text" id="authNickname" placeholder="例如：肖邦的小号 / 钢琴初学者" maxlength="20" />
+        </div>
+
+        <!-- Email -->
+        <div class="form-group">
+          <label for="authEmail">账号邮箱</label>
+          <input type="email" id="authEmail" placeholder="name@example.com" required autocomplete="email" />
+        </div>
+
+        <!-- Password -->
+        <div class="form-group">
+          <label for="authPassword">登录密码</label>
+          <input type="password" id="authPassword" placeholder="请输入密码 (至少 6 位)" required minlength="6" autocomplete="current-password" />
+        </div>
+
+        <!-- Confirm Password (register only) -->
+        <div class="form-group" id="authConfirmPasswordGroup" style="display:none">
+          <label for="authConfirmPassword">确认密码</label>
+          <input type="password" id="authConfirmPassword" placeholder="请再次输入密码" minlength="6" autocomplete="new-password" />
+        </div>
+
+        <!-- Action Button -->
+        <button type="button" class="btn-primary" id="authSubmitBtn" style="width:100%;padding:12px;margin-top:10px;font-size:14.5px">
+          <span id="authSubmitBtnText">立即登录</span>
+        </button>
+      </form>
+
+      <!-- Supabase Cloud Config Collapsible -->
+      <div class="auth-config-toggle-row" style="margin-top:16px;text-align:center">
+        <button type="button" class="link-btn" id="authToggleConfigBtn" style="font-size:12.5px;color:var(--txt3)">
+          ⚙️ 自定义 Supabase 云服务配置 (URL & Key) ▼
+        </button>
+      </div>
+
+      <div class="auth-config-wrap" id="authConfigWrap" style="display:none;margin-top:12px;padding:12px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-sm)">
+        <div class="form-group" style="margin-bottom:8px">
+          <label style="font-size:12px">Supabase Project URL</label>
+          <input type="text" id="cfgSupabaseUrl" placeholder="https://xxxx.supabase.co" style="font-size:12px;padding:7px 10px" />
+        </div>
+        <div class="form-group" style="margin-bottom:8px">
+          <label style="font-size:12px">Supabase anon public key</label>
+          <input type="password" id="cfgSupabaseKey" placeholder="eyJhbGciOi..." style="font-size:12px;padding:7px 10px" />
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button type="button" class="btn-secondary sm" id="cfgResetBtn">恢复默认</button>
+          <button type="button" class="btn-primary sm" id="cfgSaveBtn">保存配置</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ░░░ USER PROFILE & CLOUD SYNC MODAL ░░░ -->
+<div class="modal-backdrop" id="userProfileBackdrop">
+  <div class="modal modal-md" id="userProfileModal">
+    <div class="modal-header">
+      <div>
+        <h2>个人中心 & 云同步</h2>
+        <p class="modal-subtitle">已连接至云端，多设备自动协同</p>
+      </div>
+      <button class="icon-btn modal-close" id="userProfileCloseBtn" title="关闭">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <!-- User Info Card -->
+      <div class="profile-card">
+        <div class="profile-avatar" id="profileAvatar">👤</div>
+        <div class="profile-details">
+          <div class="profile-name" id="profileName">演奏者</div>
+          <div class="profile-email" id="profileEmail">user@example.com</div>
+        </div>
+        <div class="profile-badge">
+          <span class="status-dot online"></span> 已连接云端
+        </div>
+      </div>
+
+      <!-- Sync Stats Grid -->
+      <div class="sync-stats-grid" style="margin:16px 0">
+        <div class="stat-card">
+          <div class="stat-card-val" id="syncLocalCount">0</div>
+          <div class="stat-card-lbl">本地乐谱</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-val" id="syncCloudCount">-</div>
+          <div class="stat-card-lbl">云端乐谱</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-val" id="syncCheckinCount">0</div>
+          <div class="stat-card-lbl">打卡记录</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-val" id="syncStatusText" style="font-size:13px;color:#34d399">正常</div>
+          <div class="stat-card-lbl">同步状态</div>
+        </div>
+      </div>
+
+      <div class="sync-time-info" style="font-size:12px;color:var(--txt3);margin-bottom:16px;text-align:center">
+        上次同步时间：<span id="syncLastTimeText" style="color:var(--txt2)">未同步</span>
+      </div>
+
+      <!-- Sync Action Buttons -->
+      <div class="sync-actions-list" style="display:flex;flex-direction:column;gap:10px">
+        <button type="button" class="btn-primary" id="syncNowBtn" style="width:100%;padding:11px">
+          🔄 立即全量双向同步 (智能合并)
+        </button>
+        <div style="display:flex;gap:10px">
+          <button type="button" class="btn-secondary" id="syncPushLocalBtn" style="flex:1;padding:9px;font-size:12.5px">
+            ⬆️ 本地覆盖上传到云端
+          </button>
+          <button type="button" class="btn-secondary" id="syncPullCloudBtn" style="flex:1;padding:9px;font-size:12.5px">
+            ⬇️ 从云端重新拉取并合并
+          </button>
+        </div>
+      </div>
+
+      <!-- Logout & Switch Account -->
+      <div style="margin-top:20px;padding-top:14px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+        <button type="button" class="link-btn" id="openConfigFromProfileBtn" style="font-size:12px;color:var(--txt3)">
+          ⚙️ 云服务连接参数
+        </button>
+        <button type="button" class="link-btn" id="logoutBtn" style="color:#f87171;font-size:13px;font-weight:600">
+          🚪 退出登录
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ░░░ DATA MERGE PROMPT MODAL ░░░ -->
+<div class="modal-backdrop" id="dataMergeBackdrop">
+  <div class="modal modal-sm" id="dataMergeModal" style="text-align:center">
+    <div class="modal-body" style="padding:28px 22px">
+      <div style="font-size:42px;margin-bottom:10px">☁️</div>
+      <h2 style="font-size:18px;margin-bottom:8px;color:var(--txt1)">发现本地未上传的乐谱！</h2>
+      <p id="dataMergeDesc" style="font-size:13.5px;color:var(--txt2);line-height:1.5;margin-bottom:20px">
+        当前设备上有乐谱与打卡数据。是否一键上传合并到您的云端账号，实现跨设备共享？
+      </p>
+      <div style="display:flex;flex-direction:column;gap:9px">
+        <button class="btn-primary" id="mergeUploadNowBtn" style="width:100%;padding:11px">
+          ✨ 一键合并上传到云端 (推荐)
+        </button>
+        <button class="btn-secondary" id="mergePullCloudOnlyBtn" style="width:100%;padding:10px">
+          仅从云端拉取 (不上传本地)
+        </button>
+        <button class="link-btn" id="mergeDismissBtn" style="margin-top:4px;font-size:12.5px;color:var(--txt3)">
+          暂不处理，稍后手动同步
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ░░░ ELECTRONIC METRONOME MODAL ░░░ -->
+<div class="modal-backdrop" id="metronomeBackdrop">
+  <div class="modal modal-md metronome-modal" id="metronomeModal">
+    <div class="modal-header">
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="metro-header-icon">⏱️</div>
+        <div>
+          <h2>电子节拍器</h2>
+          <p class="modal-subtitle">高精度专业练琴节拍伴奏 · 零延迟无漂移</p>
+        </div>
+      </div>
+      <button class="icon-btn modal-close" id="metronomeCloseBtn" title="关闭">✕</button>
+    </div>
+
+    <div class="modal-body" style="padding-bottom:18px">
+      <!-- Beat Indicators (Dynamic Lights) -->
+      <div class="metro-beats-row" id="metroBeatsRow"></div>
+
+      <!-- Pendulum Animation View -->
+      <div class="metro-pendulum-box">
+        <div class="metro-pendulum-arm" id="metroPendulumArm">
+          <div class="metro-pendulum-needle"></div>
+          <div class="metro-pendulum-weight" id="metroPendulumWeight"></div>
+        </div>
+      </div>
+
+      <!-- BPM Hero Counter -->
+      <div class="metro-bpm-hero">
+        <div class="metro-bpm-display">
+          <span class="metro-bpm-val" id="metroBpmVal">100</span>
+          <span class="metro-bpm-unit">BPM</span>
+        </div>
+        <div class="metro-tempo-term" id="metroTempoTerm">Andante 行板 (77-108)</div>
+      </div>
+
+      <!-- BPM Stepper & Range Slider -->
+      <div class="metro-stepper-row">
+        <button type="button" class="metro-step-btn" id="metroBpmMinus5">-5</button>
+        <button type="button" class="metro-step-btn" id="metroBpmMinus1">-1</button>
+        <input type="range" class="metro-slider" id="metroBpmSlider" min="30" max="260" value="100" />
+        <button type="button" class="metro-step-btn" id="metroBpmPlus1">+1</button>
+        <button type="button" class="metro-step-btn" id="metroBpmPlus5">+5</button>
+      </div>
+
+      <!-- Quick Tempo Presets & Tap Tempo -->
+      <div class="metro-quick-row">
+        <div class="metro-presets-wrap" id="metroPresetsWrap">
+          <button type="button" class="metro-preset-pill" data-bpm="60">60 慢练</button>
+          <button type="button" class="metro-preset-pill" data-bpm="80">80 柔板</button>
+          <button type="button" class="metro-preset-pill active" data-bpm="100">100 常用</button>
+          <button type="button" class="metro-preset-pill" data-bpm="120">120 原速</button>
+          <button type="button" class="metro-preset-pill" data-bpm="144">144 快板</button>
+        </div>
+        <button type="button" class="metro-tap-btn" id="metroTapBtn" title="连续按压以测算节拍速度">
+          👆 TAP 测速
+        </button>
+      </div>
+
+      <!-- Controls Grid: Time Signature, Subdivision, Timbre, Volume -->
+      <div class="metro-controls-grid">
+        <!-- 拍号 (Beats per Bar) -->
+        <div class="form-group" style="margin-bottom:0">
+          <label>🎼 拍号 (每小节节拍)</label>
+          <div class="metro-pill-group" id="metroBeatsGroup">
+            <button type="button" class="metro-opt-pill" data-beats="1">1/4 (无重音)</button>
+            <button type="button" class="metro-opt-pill" data-beats="2">2/4</button>
+            <button type="button" class="metro-opt-pill" data-beats="3">3/4</button>
+            <button type="button" class="metro-opt-pill active" data-beats="4">4/4</button>
+            <button type="button" class="metro-opt-pill" data-beats="6">6/8</button>
+          </div>
+        </div>
+
+        <!-- 细分 (Subdivision) -->
+        <div class="form-group" style="margin-bottom:0">
+          <label>🎶 节奏细分音符</label>
+          <div class="metro-pill-group" id="metroSubGroup">
+            <button type="button" class="metro-opt-pill active" data-sub="1">♩ 一拍一音</button>
+            <button type="button" class="metro-opt-pill" data-sub="2">♪♪ 八分音符</button>
+            <button type="button" class="metro-opt-pill" data-sub="3">♫ 三连音</button>
+            <button type="button" class="metro-opt-pill" data-sub="4">♬ 十六分音符</button>
+          </div>
+        </div>
+
+        <!-- 音色 (Timbre) -->
+        <div class="form-group" style="margin-bottom:0">
+          <label>🔊 节拍器音色</label>
+          <div class="metro-pill-group" id="metroTimbreGroup">
+            <button type="button" class="metro-opt-pill active" data-timbre="woodblock">🪵 机械木鱼</button>
+            <button type="button" class="metro-opt-pill" data-timbre="bell">🔔 经典琴钟</button>
+            <button type="button" class="metro-opt-pill" data-timbre="digital">⚡ 电子蜂鸣</button>
+            <button type="button" class="metro-opt-pill" data-timbre="rimshot">🥁 清脆鼓点</button>
+          </div>
+        </div>
+
+        <!-- 音量 (Volume) -->
+        <div class="form-group" style="margin-bottom:0">
+          <label style="display:flex;justify-content:space-between">
+            <span>🔈 播放音量</span>
+            <span id="metroVolumeValText" style="color:var(--txt2)">80%</span>
+          </label>
+          <div style="display:flex;align-items:center;gap:10px">
+            <input type="range" class="metro-slider" id="metroVolumeSlider" min="0" max="100" value="80" />
+            <button type="button" class="icon-btn sm" id="metroMuteBtn" title="静音切换">🔊</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Large Play/Stop Button -->
+      <div class="metro-action-row" style="margin-top:18px">
+        <button type="button" class="metro-big-play-btn" id="metroBigPlayBtn">
+          <span class="metro-play-icon" id="metroPlayIcon">▶</span>
+          <span class="metro-play-label" id="metroPlayLabel">开始节拍</span>
+        </button>
+      </div>
+
+      <!-- Bottom link: Minimize to floating pill -->
+      <div style="text-align:center;margin-top:12px">
+        <button type="button" class="link-btn" id="metroFloatBtn" style="font-size:12.5px;color:var(--txt3)">
+          📌 缩小为悬浮窗（看谱时不遮挡）
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ░░░ FLOATING MINI METRONOME WIDGET ░░░ -->
+<div class="metro-mini-widget" id="metroMiniWidget" style="display:none">
+  <div class="metro-mini-indicator" id="metroMiniIndicator"></div>
+  <div class="metro-mini-bpm" id="metroMiniBpm">100 BPM</div>
+  <button type="button" class="metro-mini-play" id="metroMiniPlayBtn">▶</button>
+  <button type="button" class="metro-mini-expand" id="metroMiniExpandBtn" title="展开全功能面板">⤢</button>
+</div>
+
 <!-- ░░░ TOAST ░░░ -->
 <div class="toast-container" id="toastContainer"></div>
 
+<script src="supabase-client.js"></script>
+<script src="metronome.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
