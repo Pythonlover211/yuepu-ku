@@ -2,7 +2,7 @@
    Service Worker — 乐谱库 PWA
    离线缓存 App Shell
    ============================================= */
-const CACHE_NAME = 'music-score-v9';
+const CACHE_NAME = 'music-score-v10';
 const SHELL_ASSETS = [
   './',
   './index.html',

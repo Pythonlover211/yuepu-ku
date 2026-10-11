@@ -497,66 +497,88 @@
 <!-- ░░░ ENHANCED IMAGE VIEWER ░░░ -->
 <div class="viewer-backdrop" id="viewerBackdrop">
   <!-- Topbar -->
+  <!-- Topbar -->
   <div class="viewer-topbar" id="viewerTopbar">
-    <button class="viewer-exit-btn" id="viewerBackBtn" title="退出乐谱 (Esc)">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M15 19l-7-7 7-7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <span>退出</span>
-    </button>
-    <div class="viewer-info-wrap">
-      <div class="viewer-title-row">
-        <span class="viewer-title" id="viewerTitle"></span>
-        <span class="viewer-page-tag" id="viewerPageTag" style="display:none">1/1</span>
+    <div class="viewer-header-row">
+      <button class="viewer-exit-btn" id="viewerBackBtn" title="退出乐谱 (Esc)">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M15 19l-7-7 7-7" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>‹ 退出</span>
+      </button>
+      <div class="viewer-info-wrap">
+        <div class="viewer-title-row">
+          <span class="viewer-title" id="viewerTitle"></span>
+          <span class="viewer-page-tag" id="viewerPageTag" style="display:none">1/1</span>
+        </div>
+        <div class="viewer-meta-row">
+          <span class="viewer-cat" id="viewerCat"></span>
+          <span class="viewer-composer" id="viewerComposer"></span>
+          <span class="viewer-diff" id="viewerDiff"></span>
+        </div>
       </div>
-      <div class="viewer-meta-row">
-        <span class="viewer-cat" id="viewerCat"></span>
-        <span class="viewer-composer" id="viewerComposer"></span>
-        <span class="viewer-diff" id="viewerDiff"></span>
-      </div>
+      <button class="viewer-close-pill-btn" id="viewerClose" title="关闭退出 (Esc)">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+        <span>关闭</span>
+      </button>
     </div>
-    <div class="viewer-actions">
-      <!-- 记入练琴打卡 -->
-      <button class="viewer-btn" id="viewerCheckinBtn" title="记入今日练琴打卡">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M9 11l3 3L22 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
-      <!-- 电子节拍器快速开关 -->
-      <button class="viewer-btn" id="viewerMetronomeBtn" title="打开电子节拍器">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2L4 20h16L12 2z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 18l4-10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="16" cy="8" r="1.5" fill="currentColor"/></svg>
-      </button>
-      <!-- 乐器调音器快速开关 -->
-      <button class="viewer-btn" id="viewerTunerBtn" title="打开乐器调音器">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 7v5l3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-      </button>
-      <!-- 页面缩略图目录 -->
-      <button class="viewer-btn" id="viewerThumbsBtn" title="查看所有页面缩略图">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="14" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/></svg>
-      </button>
-      <!-- 滤镜切换 -->
-      <button class="viewer-btn" id="viewerFilterBtn" title="滤镜模式（原图/护眼/夜间反相/高对比）">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg>
-      </button>
-      <!-- 画笔标注 -->
-      <button class="viewer-btn" id="viewerAnnotBtn" title="手绘与指法标注">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 19l7-7 3 3-7 7-3-3z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 2l7.586 7.586" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
-      <!-- 纯净全屏演奏 / 防息屏 -->
-      <button class="viewer-btn" id="viewerStageBtn" title="纯净演奏模式（全屏+防息屏常亮）">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
-      <button class="viewer-btn" id="viewerFav" title="收藏">
-        <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" stroke="currentColor" stroke-width="2"/></svg>
-      </button>
-      <button class="viewer-btn" id="viewerEdit" title="编辑">
-        <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
-      <button class="viewer-btn" id="viewerDownload" title="下载当前乐谱">
-        <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="7 10 12 15 17 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="12" y1="15" x2="12" y2="3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-      </button>
-      <button class="viewer-btn danger" id="viewerDelete" title="删除">
-        <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><polyline points="3 6 5 6 21 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 11v6M14 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
-      <button class="viewer-btn" id="viewerClose" title="关闭 (Esc)">
-        <svg width="19" height="19" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-      </button>
+    <div class="viewer-toolbar-row">
+      <div class="viewer-actions">
+        <!-- 记入练琴打卡 -->
+        <button class="viewer-btn" id="viewerCheckinBtn" title="记入今日练琴打卡">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M9 11l3 3L22 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="viewer-btn-label">打卡</span>
+        </button>
+        <!-- 电子节拍器快速开关 -->
+        <button class="viewer-btn" id="viewerMetronomeBtn" title="打开电子节拍器">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M12 2L4 20h16L12 2z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 18l4-10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="16" cy="8" r="1.5" fill="currentColor"/></svg>
+          <span class="viewer-btn-label">节拍器</span>
+        </button>
+        <!-- 乐器调音器快速开关 -->
+        <button class="viewer-btn" id="viewerTunerBtn" title="打开乐器调音器">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 7v5l3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <span class="viewer-btn-label">调音器</span>
+        </button>
+        <!-- 页面缩略图目录 -->
+        <button class="viewer-btn" id="viewerThumbsBtn" title="查看所有页面缩略图">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="14" y="3" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="3" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/><rect x="14" y="14" width="7" height="7" rx="1.5" stroke="currentColor" stroke-width="2"/></svg>
+          <span class="viewer-btn-label">目录</span>
+        </button>
+        <!-- 滤镜切换 -->
+        <button class="viewer-btn" id="viewerFilterBtn" title="滤镜模式（原图/护眼/夜间反相/高对比）">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg>
+          <span class="viewer-btn-label">滤镜</span>
+        </button>
+        <!-- 背景调光 -->
+        <button class="viewer-btn" id="viewerThemeBtn" title="一键切换背景底色与亮度">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="5" stroke="currentColor" stroke-width="2"/><line x1="12" y1="1" x2="12" y2="3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="12" y1="21" x2="12" y2="23" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="1" y1="12" x2="3" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="21" y1="12" x2="23" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <span class="viewer-btn-label">调光</span>
+        </button>
+        <!-- 画笔标注 -->
+        <button class="viewer-btn" id="viewerAnnotBtn" title="手绘与指法标注">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M12 19l7-7 3 3-7 7-3-3z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 2l7.586 7.586" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="viewer-btn-label">标注</span>
+        </button>
+        <!-- 纯净全屏演奏 / 防息屏 -->
+        <button class="viewer-btn" id="viewerStageBtn" title="纯净演奏模式（全屏+防息屏常亮）">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="viewer-btn-label">纯净</span>
+        </button>
+        <button class="viewer-btn" id="viewerFav" title="收藏">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" stroke="currentColor" stroke-width="2"/></svg>
+          <span class="viewer-btn-label">收藏</span>
+        </button>
+        <button class="viewer-btn" id="viewerEdit" title="编辑">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="viewer-btn-label">编辑</span>
+        </button>
+        <button class="viewer-btn" id="viewerDownload" title="下载当前乐谱">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="7 10 12 15 17 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="12" y1="15" x2="12" y2="3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <span class="viewer-btn-label">下载</span>
+        </button>
+        <button class="viewer-btn danger" id="viewerDelete" title="删除">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><polyline points="3 6 5 6 21 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 11v6M14 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="viewer-btn-label">删除</span>
+        </button>
+      </div>
     </div>
   </div>
 

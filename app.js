@@ -764,12 +764,35 @@ const FILTER_NAMES = {
   contrast: '高对比度锐化'
 };
 
+const VIEWER_BG_PRESETS = [
+  { name: '柔和琴房 (推荐)', bg: 'radial-gradient(ellipse at 50% 45%, #475569 0%, #334155 55%, #1e293b 100%)', isLight: false },
+  { name: '明亮白昼 (高亮)', bg: 'radial-gradient(ellipse at 50% 45%, #f8fafc 0%, #e2e8f0 55%, #cbd5e1 100%)', isLight: true },
+  { name: '护眼暖光 (暖色)', bg: 'radial-gradient(ellipse at 50% 45%, #443a2f 0%, #2e261e 55%, #1c1712 100%)', isLight: false },
+  { name: '沉浸经典 (暗光)', bg: 'radial-gradient(ellipse at 50% 45%, #2a3447 0%, #1c2331 55%, #121620 100%)', isLight: false }
+];
+let viewerBgPresetIdx = parseInt(localStorage.getItem('viewer_bg_preset_idx') || '0', 10);
+
+function applyViewerBgPreset(idx, showToast = false){
+  viewerBgPresetIdx = (idx + VIEWER_BG_PRESETS.length) % VIEWER_BG_PRESETS.length;
+  localStorage.setItem('viewer_bg_preset_idx', viewerBgPresetIdx);
+  const preset = VIEWER_BG_PRESETS[viewerBgPresetIdx];
+  const vb = $('viewerBackdrop');
+  if(vb){
+    vb.style.background = preset.bg;
+    vb.classList.toggle('viewer-light-mode', preset.isLight);
+  }
+  if(showToast){
+    toast('🎨 乐谱背景已调为：' + preset.name);
+  }
+}
+
 function openViewer(idx, list, pageIdx = 0){
   S.viewerList = list;
   S.viewerIdx = idx;
   S.viewerPageIdx = pageIdx;
   if(S.isAnnotating) toggleAnnotate();
   if(S.isStageMode) toggleStageMode();
+  applyViewerBgPreset(viewerBgPresetIdx, false);
   renderViewer();
   $('viewerBackdrop').classList.add('open');
   document.body.style.overflow = 'hidden';
@@ -2338,6 +2361,12 @@ function bindEvents(){
     if($('filterDropdown').classList.contains('open') && !$('filterDropdown').contains(e.target) && e.target !== $('viewerFilterBtn') && !$('viewerFilterBtn').contains(e.target)){
       $('filterDropdown').classList.remove('open');
     }
+  });
+
+  // Viewer Background Lighting Switcher
+  $('viewerThemeBtn')?.addEventListener('click', e => {
+    e.stopPropagation();
+    applyViewerBgPreset(viewerBgPresetIdx + 1, true);
   });
 
   // Annotations
