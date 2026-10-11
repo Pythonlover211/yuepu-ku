@@ -1571,7 +1571,8 @@ body{background:var(--bg0);color:var(--txt1)}
 
 /* Auth Notice Box */
 .auth-notice-box{
-  padding:10px 14px;border-radius:var(--r-sm);font-size:13px;line-height:1.4;margin-bottom:14px;
+  padding:12px 14px;border-radius:var(--r-sm);font-size:13px;line-height:1.55;margin-bottom:14px;
+  white-space:pre-line;word-break:break-word;
 }
 .auth-notice-box.error{
   background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.35);color:#f87171;

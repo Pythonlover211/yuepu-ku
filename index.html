@@ -1011,10 +1011,12 @@
           <label style="font-size:12px">Supabase anon public key</label>
           <input type="password" id="cfgSupabaseKey" placeholder="eyJhbGciOi..." style="font-size:12px;padding:7px 10px" />
         </div>
-        <div style="display:flex;gap:8px;justify-content:flex-end">
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px;flex-wrap:wrap">
+          <button type="button" class="btn-secondary sm" id="cfgTestBtn" title="测试设备与云端服务器之间的网络连通性">🔍 测试云端连接</button>
           <button type="button" class="btn-secondary sm" id="cfgResetBtn">恢复默认</button>
           <button type="button" class="btn-primary sm" id="cfgSaveBtn">保存配置</button>
         </div>
+        <div id="cfgTestResult" style="display:none;font-size:12px;margin-top:8px;padding:8px 10px;border-radius:6px;line-height:1.4"></div>
       </div>
     </div>
   </div>

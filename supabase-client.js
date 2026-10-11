@@ -21,14 +21,28 @@
       this.syncListeners = new Set();
     }
 
+    cleanUrl(url) {
+      if (!url) return '';
+      let u = String(url).trim();
+      u = u.replace(/\/+$/, '');
+      u = u.replace(/\/rest\/v1\/?$/i, '');
+      u = u.replace(/\/auth\/v1\/?$/i, '');
+      u = u.replace(/\/storage\/v1\/?$/i, '');
+      u = u.replace(/\/+$/, '');
+      if (u && !/^https?:\/\//i.test(u)) {
+        u = 'https://' + u;
+      }
+      return u;
+    }
+
     loadConfig() {
       try {
         const raw = localStorage.getItem(STORAGE_KEY_CONFIG);
         if (raw) {
           const parsed = JSON.parse(raw);
           return {
-            url: parsed.url || DEFAULT_SUPABASE_URL,
-            anonKey: parsed.anonKey || DEFAULT_SUPABASE_ANON_KEY
+            url: this.cleanUrl(parsed.url) || DEFAULT_SUPABASE_URL,
+            anonKey: (parsed.anonKey || DEFAULT_SUPABASE_ANON_KEY).trim()
           };
         }
       } catch (e) {
@@ -41,9 +55,11 @@
     }
 
     saveConfig(url, anonKey) {
+      const cleanedUrl = this.cleanUrl(url) || DEFAULT_SUPABASE_URL;
+      const cleanedKey = (anonKey || DEFAULT_SUPABASE_ANON_KEY).trim();
       this.config = {
-        url: (url || '').trim().replace(/\/+$/, ''),
-        anonKey: (anonKey || '').trim()
+        url: cleanedUrl,
+        anonKey: cleanedKey
       };
       localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(this.config));
     }
@@ -116,31 +132,100 @@
     }
 
     // ==========================================
+    // 🔍 云端连通性快速诊断测试
+    // ==========================================
+
+    async testConnection(customUrl, customKey) {
+      const targetUrl = this.cleanUrl(customUrl || this.config.url || DEFAULT_SUPABASE_URL);
+      const targetKey = (customKey || this.config.anonKey || DEFAULT_SUPABASE_ANON_KEY).trim();
+      if (!targetUrl) throw new Error('请输入有效的 Supabase 项目 URL');
+
+      const startTime = Date.now();
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+      try {
+        const res = await fetch(`${targetUrl}/auth/v1/health`, {
+          method: 'GET',
+          headers: { 'apikey': targetKey },
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        const latency = Date.now() - startTime;
+        if (res.ok) {
+          return { ok: true, latency, message: `✅ 云端网络通畅！往返延时: ${latency} ms` };
+        }
+        return { ok: false, latency, message: `⚠️ 云端返回状态码 HTTP ${res.status}，请核对 anon key` };
+      } catch (err) {
+        clearTimeout(timeoutId);
+        if (err.name === 'AbortError') {
+          throw new Error('连接超时 (8秒未响应)。国内直连境外云服务较慢，请开启网络代理后重试');
+        }
+        const msg = err.message || '';
+        if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('Load failed')) {
+          throw new Error('网络无法触达 (Failed to fetch)。请检查设备网络或开启代理/梯子');
+        }
+        throw new Error(`连接失败: ${msg}`);
+      }
+    }
+
+    // ==========================================
     // 🔐 身份认证 API (Auth API)
     // ==========================================
 
     async signUp(email, password, nickname) {
       if (!this.isConfigured()) throw new Error('请先配置 Supabase Project URL 与 anon key');
 
-      const url = `${this.config.url}/auth/v1/signup`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'apikey': this.config.anonKey,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          email: email.trim(),
-          password: password,
-          data: {
-            nickname: (nickname || '').trim() || email.split('@')[0]
-          }
-        })
-      });
+      const cleanBase = this.cleanUrl(this.config.url);
+      const url = `${cleanBase}/auth/v1/signup`;
+      let res;
+      try {
+        res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'apikey': this.config.anonKey,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            email: email.trim(),
+            password: password,
+            data: {
+              nickname: (nickname || '').trim() || email.split('@')[0]
+            }
+          })
+        });
+      } catch (networkErr) {
+        console.error('Sign up fetch failed', networkErr);
+        throw new Error(
+          '❌ 网络连接失败 (Failed to fetch)：无法连接到云端服务器。\n' +
+          '• 若在手机端使用：国内直连境外 Supabase 易受阻，手机请开启网络加速/代理软件；\n' +
+          '• 若自定义了 URL：请点击下方「自定义配置」，确保格式为 https://xxxx.supabase.co（不要带 /rest/v1）。'
+        );
+      }
 
-      const data = await res.json();
+      let data;
+      try {
+        data = await res.json();
+      } catch (jsonErr) {
+        throw new Error(`云端响应解析失败 (${res.status} ${res.statusText})`);
+      }
+
       if (!res.ok) {
-        throw new Error(data.msg || data.message || data.error_description || '注册失败，请检查邮箱格式或密码');
+        const rawMsg = data.msg || data.message || data.error_description || '';
+        const errorCode = data.error_code || '';
+        if (rawMsg.includes('rate limit') || errorCode.includes('rate_limit')) {
+          throw new Error(
+            '⚠️ 邮件发送已达频率限制 (email rate limit exceeded)。\n' +
+            '【彻底解决办法】：请在 Supabase 后台 Project Settings -> Authentication -> User Signups 中，将「Confirm email」彻底关闭（拨为灰色并点击 Save changes），即可免验证直接秒速注册！'
+          );
+        }
+        if (rawMsg.includes('invalid') && rawMsg.includes('email')) {
+          throw new Error('⚠️ 邮箱格式不正确，请使用常用真实邮箱（如 @qq.com 或 @163.com）。');
+        }
+        if (rawMsg.includes('already registered') || rawMsg.includes('already exists')) {
+          throw new Error('⚠️ 该邮箱已被注册，请直接切换上方「账号登录」。');
+        }
+        throw new Error(rawMsg || '注册失败，请检查邮箱格式或密码');
       }
 
       // 如果开启了免邮箱验证，直接自动登录
@@ -155,22 +240,46 @@
     async signIn(email, password) {
       if (!this.isConfigured()) throw new Error('请先配置 Supabase Project URL 与 anon key');
 
-      const url = `${this.config.url}/auth/v1/token?grant_type=password`;
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'apikey': this.config.anonKey,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          email: email.trim(),
-          password: password
-        })
-      });
+      const cleanBase = this.cleanUrl(this.config.url);
+      const url = `${cleanBase}/auth/v1/token?grant_type=password`;
+      let res;
+      try {
+        res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'apikey': this.config.anonKey,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            email: email.trim(),
+            password: password
+          })
+        });
+      } catch (networkErr) {
+        console.error('Sign in fetch failed', networkErr);
+        throw new Error(
+          '❌ 网络连接失败 (Failed to fetch)：无法连接到云端服务器。\n' +
+          '• 若在手机端使用：国内直连境外 Supabase 易受阻，手机请开启网络加速/代理软件；\n' +
+          '• 若自定义了 URL：请点击下方「自定义配置」，确保格式为 https://xxxx.supabase.co（不要带 /rest/v1）。'
+        );
+      }
 
-      const data = await res.json();
+      let data;
+      try {
+        data = await res.json();
+      } catch (jsonErr) {
+        throw new Error(`云端响应解析失败 (${res.status} ${res.statusText})`);
+      }
+
       if (!res.ok) {
-        throw new Error(data.error_description || data.msg || data.message || '账号或密码错误');
+        const rawMsg = data.error_description || data.msg || data.message || '';
+        if (rawMsg.includes('Invalid login credentials')) {
+          throw new Error('⚠️ 账号邮箱或密码错误，请核对后重试');
+        }
+        if (rawMsg.includes('Email not confirmed')) {
+          throw new Error('⚠️ 该账号邮箱尚未验证。请前往邮箱查收邮件点击确认，或在 Supabase 控制台将 Confirm email 关闭。');
+        }
+        throw new Error(rawMsg || '登录失败');
       }
 
       this.saveSession(data);
@@ -251,17 +360,23 @@
         }
       }
 
-      const uploadUrl = `${this.config.url}/storage/v1/object/score-images/${encodeURIComponent(remotePath)}`;
-      const res = await fetch(uploadUrl, {
-        method: 'POST',
-        headers: {
-          'apikey': this.config.anonKey,
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': contentType,
-          'x-upsert': 'true'
-        },
-        body: blob
-      });
+      const cleanBase = this.cleanUrl(this.config.url);
+      const uploadUrl = `${cleanBase}/storage/v1/object/score-images/${encodeURIComponent(remotePath)}`;
+      let res;
+      try {
+        res = await fetch(uploadUrl, {
+          method: 'POST',
+          headers: {
+            'apikey': this.config.anonKey,
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': contentType,
+            'x-upsert': 'true'
+          },
+          body: blob
+        });
+      } catch (err) {
+        throw new Error('网络连接中断 (Failed to fetch)：乐谱图片上传失败，请检查网络');
+      }
 
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
@@ -269,7 +384,7 @@
       }
 
       // 获取公开访问链接
-      return `${this.config.url}/storage/v1/object/public/score-images/${remotePath}`;
+      return `${cleanBase}/storage/v1/object/public/score-images/${remotePath}`;
     }
 
     // ==========================================
@@ -281,7 +396,8 @@
       const token = this.getAccessToken();
       if (!token) throw new Error('用户未登录，无法访问云端数据');
 
-      const url = `${this.config.url}/rest/v1/${endpoint}`;
+      const cleanBase = this.cleanUrl(this.config.url);
+      const url = `${cleanBase}/rest/v1/${endpoint}`;
       const headers = {
         'apikey': this.config.anonKey,
         'Authorization': `Bearer ${token}`,
@@ -289,10 +405,15 @@
         ...(options.headers || {})
       };
 
-      const res = await fetch(url, {
-        ...options,
-        headers
-      });
+      let res;
+      try {
+        res = await fetch(url, {
+          ...options,
+          headers
+        });
+      } catch (networkErr) {
+        throw new Error('网络连接中断 (Failed to fetch)：无法访问云端数据库，请检查网络或代理');
+      }
 
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));

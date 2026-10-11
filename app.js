@@ -2800,14 +2800,49 @@ function initAuthAndSync() {
     });
   }
 
+  // Test Connection
+  if ($('cfgTestBtn')) {
+    $('cfgTestBtn').addEventListener('click', async () => {
+      const url = $('cfgSupabaseUrl') ? $('cfgSupabaseUrl').value : '';
+      const key = $('cfgSupabaseKey') ? $('cfgSupabaseKey').value : '';
+      const resBox = $('cfgTestResult');
+      if (resBox) {
+        resBox.style.display = 'block';
+        resBox.style.background = 'rgba(59,130,246,0.1)';
+        resBox.style.border = '1px solid rgba(59,130,246,0.25)';
+        resBox.style.color = '#60a5fa';
+        resBox.textContent = '⏳ 正在测试与云端服务器的连通性...';
+      }
+      try {
+        const res = await sync.testConnection(url, key);
+        if (resBox) {
+          resBox.style.background = res.ok ? 'rgba(34,197,94,0.12)' : 'rgba(234,179,8,0.12)';
+          resBox.style.border = res.ok ? '1px solid rgba(34,197,94,0.3)' : '1px solid rgba(234,179,8,0.3)';
+          resBox.style.color = res.ok ? '#4ade80' : '#facc15';
+          resBox.textContent = res.message;
+        }
+      } catch (err) {
+        if (resBox) {
+          resBox.style.background = 'rgba(248,113,113,0.12)';
+          resBox.style.border = '1px solid rgba(248,113,113,0.35)';
+          resBox.style.color = '#f87171';
+          resBox.textContent = '❌ ' + err.message;
+        }
+      }
+    });
+  }
+
   // Save Config
   if ($('cfgSaveBtn')) {
     $('cfgSaveBtn').addEventListener('click', () => {
       const url = $('cfgSupabaseUrl') ? $('cfgSupabaseUrl').value : '';
       const key = $('cfgSupabaseKey') ? $('cfgSupabaseKey').value : '';
       sync.saveConfig(url, key);
-      toast('✅ 云服务配置已保存！', 'success');
+      fillConfigInputs();
+      toast('✅ 云服务配置已保存并自动净化 URL！', 'success');
       setAuthNotice('');
+      const resBox = $('cfgTestResult');
+      if (resBox) resBox.style.display = 'none';
     });
   }
 
@@ -2818,6 +2853,8 @@ function initAuthAndSync() {
       sync.config = sync.loadConfig();
       fillConfigInputs();
       toast('已重置为默认配置', 'info');
+      const resBox = $('cfgTestResult');
+      if (resBox) resBox.style.display = 'none';
     });
   }
 
