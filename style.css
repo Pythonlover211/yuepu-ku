@@ -904,17 +904,50 @@ body{background:var(--bg0);color:var(--txt1)}
    ══════════════════════════════════════════ */
 .viewer-backdrop{
   position:fixed;top:0;right:0;bottom:0;left:0;inset:0;z-index:400;
-  background:rgba(0,0,0,.94);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+  background:radial-gradient(ellipse at 50% 45%, #425272 0%, #2f3c54 55%, #21293a 100%);
+  backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
   display:none;flex-direction:column;
+  transition:background 0.3s ease;
 }
 .viewer-backdrop.open{display:flex}
 .viewer-topbar{
   display:flex;align-items:center;justify-content:space-between;
   padding:10px 18px;
-  background:rgba(0,0,0,.55);border-bottom:1px solid rgba(255,255,255,.07);
+  background:rgba(20,24,36,.82);
+  border-bottom:1px solid rgba(255,255,255,.1);
+  box-shadow:0 4px 20px rgba(0,0,0,.25);
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
   flex-shrink:0;gap:12px;z-index:410;
   animation:modalIn .25s ease;
   transition:opacity .25s ease,transform .25s ease;
+}
+.viewer-exit-btn{
+  display:inline-flex;align-items:center;gap:6px;
+  padding:7px 15px 7px 11px;
+  background:rgba(255,255,255,.13);
+  border:1px solid rgba(255,255,255,.2);
+  border-radius:24px;
+  color:#f8fafc;
+  font-size:13.5px;
+  font-weight:600;
+  cursor:pointer;
+  flex-shrink:0;
+  transition:all var(--ease);
+  box-shadow:0 2px 8px rgba(0,0,0,.2);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+}
+.viewer-exit-btn:hover{
+  background:rgba(255,255,255,.24);
+  border-color:rgba(255,255,255,.38);
+  color:#ffffff;
+  transform:translateX(-1px);
+}
+.viewer-exit-btn:active{
+  transform:scale(0.96);
+}
+.viewer-exit-btn svg{
+  flex-shrink:0;
 }
 .viewer-info-wrap{flex:1;min-width:0}
 .viewer-title-row{display:flex;align-items:center;gap:7px}
@@ -928,16 +961,77 @@ body{background:var(--bg0);color:var(--txt1)}
 .viewer-cat{font-size:11px;color:var(--txt3)}
 .viewer-composer{font-size:11px;color:var(--txt4)}
 .viewer-diff{font-size:11px;color:#fbbf24}
-.viewer-actions{display:flex;gap:4px;flex-shrink:0;align-items:center}
+.viewer-actions{
+  display:flex;gap:4px;flex-shrink:0;align-items:center;
+  overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;
+}
+.viewer-actions::-webkit-scrollbar{display:none}
 .viewer-btn{
   width:36px;height:36px;display:flex;align-items:center;justify-content:center;
-  color:#94a3b8;border-radius:9px;
+  color:#94a3b8;border-radius:9px;flex-shrink:0;
   transition:background var(--ease),color var(--ease),transform var(--ease);
 }
 .viewer-btn:hover{background:rgba(255,255,255,.1);color:#f1f5f9}
 .viewer-btn.active{background:var(--primary);color:#fff;box-shadow:0 2px 10px var(--btn-shadow)}
 .viewer-btn.danger:hover{color:#f87171;background:rgba(248,113,113,.1)}
 .viewer-btn.is-fav svg{fill:#fbbf24;stroke:#fbbf24}
+
+/* Theme adaptations for viewer */
+[data-theme="daylight"] .viewer-backdrop{
+  background:radial-gradient(ellipse at 50% 45%, #f1f5f9 0%, #e2e8f0 55%, #cbd5e1 100%);
+}
+[data-theme="daylight"] .viewer-topbar{
+  background:rgba(255,255,255,.96);
+  border-bottom:1px solid rgba(0,0,0,.12);
+  box-shadow:0 4px 16px rgba(0,0,0,.08);
+}
+[data-theme="daylight"] .viewer-exit-btn{
+  background:rgba(0,0,0,.07);
+  border-color:rgba(0,0,0,.18);
+  color:#0f172a;
+  box-shadow:0 2px 6px rgba(0,0,0,.06);
+}
+[data-theme="daylight"] .viewer-exit-btn:hover{
+  background:rgba(0,0,0,.14);
+  color:#000000;
+}
+[data-theme="daylight"] .viewer-title{color:#0f172a;}
+[data-theme="daylight"] .viewer-cat{color:#334155;}
+[data-theme="daylight"] .viewer-composer{color:#475569;}
+[data-theme="daylight"] .viewer-btn{color:#334155;}
+[data-theme="daylight"] .viewer-btn:hover{background:rgba(0,0,0,.08);color:#0f172a;}
+[data-theme="daylight"] .viewer-btn.active{background:var(--primary);color:#fff;}
+[data-theme="daylight"] .viewer-zoom-bar,
+[data-theme="daylight"] .viewer-page-pill{
+  background:rgba(255,255,255,.96);
+  border-color:rgba(0,0,0,.14);
+  box-shadow:0 6px 20px rgba(0,0,0,.12);
+}
+[data-theme="daylight"] .zoom-btn,
+[data-theme="daylight"] .zoom-val-btn{color:#1e293b;}
+[data-theme="daylight"] .zoom-btn:hover{background:rgba(0,0,0,.08);color:#0f172a;}
+[data-theme="daylight"] .page-pill-text{color:#0f172a;}
+[data-theme="daylight"] .page-pill-btn{background:rgba(0,0,0,.08);color:#0f172a;}
+[data-theme="daylight"] .page-pill-btn:hover{background:rgba(0,0,0,.16);}
+[data-theme="daylight"] .viewer-footer{
+  background:rgba(255,255,255,.96);
+  border-top:1px solid rgba(0,0,0,.12);
+  box-shadow:0 -4px 16px rgba(0,0,0,.08);
+}
+[data-theme="daylight"] .viewer-counter{color:#334155;}
+
+[data-theme="amethyst"] .viewer-backdrop{
+  background:radial-gradient(ellipse at 50% 45%, #433364 0%, #2f2347 55%, #1e162e 100%);
+}
+[data-theme="ocean"] .viewer-backdrop{
+  background:radial-gradient(ellipse at 50% 45%, #2a4c6a 0%, #1c354b 55%, #132433 100%);
+}
+[data-theme="warm"] .viewer-backdrop{
+  background:radial-gradient(ellipse at 50% 45%, #4e3e30 0%, #382c21 55%, #261e16 100%);
+}
+[data-theme="emerald"] .viewer-backdrop{
+  background:radial-gradient(ellipse at 50% 45%, #275245 0%, #1a3930 55%, #112620 100%);
+}
 
 /* Filter Dropdown */
 .filter-dropdown{
@@ -1162,7 +1256,9 @@ body{background:var(--bg0);color:var(--txt1)}
 .viewer-footer{
   display:flex;align-items:center;justify-content:space-between;
   padding:9px 18px;
-  background:rgba(0,0,0,.55);border-top:1px solid rgba(255,255,255,.07);
+  background:rgba(20,24,36,.82);border-top:1px solid rgba(255,255,255,.1);
+  box-shadow:0 -4px 20px rgba(0,0,0,.2);
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
   flex-shrink:0;z-index:410;
   transition:opacity .25s ease,transform .25s ease;
 }
@@ -1309,8 +1405,10 @@ body{background:var(--bg0);color:var(--txt1)}
   .content-area{padding:14px}
   .score-grid{grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px}
   .viewer-nav-btn{display:none}
-  .viewer-topbar{padding:8px 10px;gap:6px}
-  .viewer-title{font-size:13.5px;max-width:120px}
+  .viewer-topbar{padding:8px 12px;gap:8px}
+  .viewer-exit-btn{padding:5px 11px 5px 8px;font-size:12.5px;gap:4px}
+  .viewer-title{font-size:13.5px;max-width:130px}
+  .viewer-actions{max-width:55%;flex-shrink:1}
   .viewer-btn{width:32px;height:32px;border-radius:7px}
   .viewer-btn svg{width:16px;height:16px}
   .filter-dropdown{right:8px;top:50px;min-width:190px}

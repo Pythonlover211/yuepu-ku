@@ -2306,6 +2306,7 @@ function bindEvents(){
 
   // Viewer Actions
   $('viewerClose').addEventListener('click',closeViewer);
+  $('viewerBackBtn')?.addEventListener('click',closeViewer);
   $('viewerPrev').addEventListener('click',()=>viewerNavScore(-1));
   $('viewerNext').addEventListener('click',()=>viewerNavScore(1));
   $('pagePillPrev').addEventListener('click',()=>viewerTurnPage(-1));
