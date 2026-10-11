@@ -416,12 +416,29 @@
       }
 
       if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson.message || errJson.hint || `云端请求错误 (${res.status}): ${res.statusText}`);
+        let errJson = {};
+        try { errJson = await res.json(); } catch(e) {}
+        throw new Error(errJson.message || errJson.hint || errJson.error_description || `云端请求错误 (${res.status}): ${res.statusText}`);
       }
 
       if (res.status === 204) return null;
-      return await res.json();
+      const text = await res.text();
+      if (!text || !text.trim()) return null;
+      try {
+        return JSON.parse(text);
+      } catch (parseErr) {
+        return null;
+      }
+    }
+
+    safeIsoDate(val) {
+      if (!val) return new Date().toISOString();
+      try {
+        const d = new Date(val);
+        return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+      } catch (e) {
+        return new Date().toISOString();
+      }
     }
 
     // ==========================================
@@ -454,10 +471,10 @@
         is_favorite: Boolean(score.favorite != null ? score.favorite : score.isFavorite),
         is_folder: Boolean(score.isFolder || rawPages.length > 1),
         folder_name: score.folderName || '',
-        updated_at: score.updatedAt ? new Date(score.updatedAt).toISOString() : new Date().toISOString()
+        updated_at: this.safeIsoDate(score.updatedAt)
       };
 
-      await this.restRequest('scores', {
+      await this.restRequest('scores?on_conflict=id', {
         method: 'POST',
         headers: { 'Prefer': 'resolution=merge-duplicates' },
         body: JSON.stringify(scorePayload)
@@ -500,7 +517,7 @@
           updated_at: new Date().toISOString()
         };
 
-        await this.restRequest('score_pages', {
+        await this.restRequest('score_pages?on_conflict=id', {
           method: 'POST',
           headers: { 'Prefer': 'resolution=merge-duplicates' },
           body: JSON.stringify(pagePayload)
@@ -523,11 +540,11 @@
         duration: Number(checkin.duration) || 30,
         notes: checkin.notes || '',
         mood: checkin.mood || '充实',
-        created_at: checkin.createdAt ? new Date(checkin.createdAt).toISOString() : new Date().toISOString(),
+        created_at: this.safeIsoDate(checkin.createdAt),
         updated_at: new Date().toISOString()
       };
 
-      await this.restRequest('checkins', {
+      await this.restRequest('checkins?on_conflict=id', {
         method: 'POST',
         headers: { 'Prefer': 'resolution=merge-duplicates' },
         body: JSON.stringify(checkinPayload)
@@ -540,7 +557,7 @@
     async syncUserSettings(settings = {}) {
       await this.refreshSessionIfNeeded();
       const token = this.getAccessToken();
-      if (!token) return null;
+      if (!token) throw new Error('用户未登录，无法同步配置');
 
       const cleanBase = this.cleanUrl(this.config.url);
       const url = `${cleanBase}/auth/v1/user`;
@@ -574,11 +591,14 @@
             this.saveSession(this.session);
           }
           return mergedSettings;
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.message || errData.msg || `HTTP ${res.status}`);
         }
       } catch (err) {
         console.warn('syncUserSettings failed:', err);
+        throw err;
       }
-      return null;
     }
 
     /**
@@ -591,6 +611,38 @@
     }
 
     /**
+     * 主动从云端服务器拉取最新用户元数据（跨设备同步时避免读取本地旧缓存）
+     */
+    async fetchFreshUserSettings() {
+      await this.refreshSessionIfNeeded();
+      const token = this.getAccessToken();
+      if (!token) return this.fetchUserSettings();
+
+      const cleanBase = this.cleanUrl(this.config.url);
+      const url = `${cleanBase}/auth/v1/user`;
+      try {
+        const res = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'apikey': this.config.anonKey,
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        if (res.ok) {
+          const freshUser = await res.json();
+          if (this.session) {
+            this.session.user = freshUser;
+            this.saveSession(this.session);
+          }
+          return (freshUser.user_metadata && freshUser.user_metadata.app_settings) || null;
+        }
+      } catch (e) {
+        console.warn('fetchFreshUserSettings error:', e);
+      }
+      return this.fetchUserSettings();
+    }
+
+    /**
      * 从云端拉取所有乐谱及页面，并精准对齐本地数据模型
      */
     async fetchCloudScores() {
@@ -599,7 +651,8 @@
 
       const scoreIds = cloudScores.map(s => s.id);
       // 获取对应的页面
-      const pages = await this.restRequest(`score_pages?score_id=in.(${scoreIds.join(',')})&order=page_order.asc`);
+      const quotedIds = scoreIds.map(id => `"${id}"`).join(',');
+      const pages = await this.restRequest(`score_pages?score_id=in.(${quotedIds})&order=page_order.asc`);
       const pageMap = {};
       (pages || []).forEach(p => {
         if (!pageMap[p.score_id]) pageMap[p.score_id] = [];

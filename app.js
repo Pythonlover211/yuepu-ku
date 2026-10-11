@@ -155,7 +155,7 @@ function compressImageForBg(dataURL) {
     }
     const img = new Image();
     img.onload = () => {
-      const maxW = 1920, maxH = 1080;
+      const maxW = 1280, maxH = 720;
       let w = img.width, h = img.height;
       if (w > maxW || h > maxH) {
         const ratio = Math.min(maxW / w, maxH / h);
@@ -167,7 +167,7 @@ function compressImageForBg(dataURL) {
       canvas.height = h;
       const ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0, w, h);
-      resolve(canvas.toDataURL('image/jpeg', 0.82));
+      resolve(canvas.toDataURL('image/jpeg', 0.75));
     };
     img.onerror = () => resolve(dataURL);
     img.src = dataURL;
@@ -2792,7 +2792,10 @@ function bindEvents(){
 
   // Themes
   $('themeGrid').querySelectorAll('.theme-card').forEach(btn=>{
-    btn.addEventListener('click',()=>applyTheme(btn.dataset.theme));
+    btn.addEventListener('click',()=>{
+      applyTheme(btn.dataset.theme);
+      syncSettingsToCloud();
+    });
   });
 
   // Background
@@ -2811,12 +2814,14 @@ function bindEvents(){
     applyBackground();
     await saveSetting('bgBlur',S.bgBlur);
   });
+  $('bgBlur').addEventListener('change', () => syncSettingsToCloud());
   $('bgOverlayOpacity').addEventListener('input',async()=>{
     S.bgOverlay=parseInt($('bgOverlayOpacity').value);
     $('overlayVal').textContent=S.bgOverlay+'%';
     applyBackground();
     await saveSetting('bgOverlay',S.bgOverlay);
   });
+  $('bgOverlayOpacity').addEventListener('change', () => syncSettingsToCloud());
 
   // Card size
   $('cardSizeGroup').querySelectorAll('.card-size-btn').forEach(b=>{
@@ -3279,28 +3284,48 @@ function initAuthAndSync() {
 
   if ($('syncPushLocalBtn')) {
     $('syncPushLocalBtn').addEventListener('click', async () => {
-      if (!sync.isLoggedIn()) { toast('请先登录', 'info'); return; }
+      if (!sync.isLoggedIn()) { toast('请先登录云端账号', 'info'); return; }
       try {
-        toast('⬆️ 正在上传全部本地乐谱与打卡数据...', 'info');
-        for (const s of S.scores) await sync.uploadSingleScoreToCloud(s);
-        for (const c of S.checkins) await sync.uploadSingleCheckinToCloud(c);
-        toast('🎉 本地数据已全部上传并合并到云端！', 'success');
+        toast('⬆️ 正在上传本地乐谱、打卡与个性化配置...', 'info');
+
+        // 1. 同步用户个性化配置（背景壁纸、主题颜色、自定义分类）
+        await syncSettingsToCloud();
+
+        // 2. 上传全部本地乐谱
+        let uploadedScores = 0;
+        for (const s of S.scores) {
+          await sync.uploadSingleScoreToCloud(s);
+          uploadedScores++;
+        }
+
+        // 3. 上传全部打卡记录
+        for (const c of S.checkins) {
+          await sync.uploadSingleCheckinToCloud(c);
+        }
+
+        // 4. 实时刷新云端数量，确保界面数字立即更新
+        const cloudScores = await sync.fetchCloudScores();
+        if ($('syncCloudCount')) $('syncCloudCount').textContent = cloudScores.length;
+        if ($('syncLocalCount')) $('syncLocalCount').textContent = S.scores.length;
+
         sync.setLastSyncTime(new Date().toISOString());
         renderAuthStatus();
+        toast(`🎉 本地 ${uploadedScores} 首乐谱及背景/主题配置已成功上传至云端！`, 'success');
       } catch (err) {
-        toast(`上传失败: ${err.message}`, 'error');
+        console.error('Push local to cloud failed:', err);
+        toast(`❌ 上传失败: ${err.message}`, 'error');
       }
     });
   }
 
   if ($('syncPullCloudBtn')) {
     $('syncPullCloudBtn').addEventListener('click', async () => {
-      if (!sync.isLoggedIn()) { toast('请先登录', 'info'); return; }
+      if (!sync.isLoggedIn()) { toast('请先登录云端账号', 'info'); return; }
       try {
-        toast('⬇️ 正在从云端拉取乐谱与打卡数据...', 'info');
+        toast('⬇️ 正在从云端拉取乐谱与个性化配置...', 'info');
         await performFullSync(false);
       } catch (err) {
-        toast(`拉取失败: ${err.message}`, 'error');
+        toast(`❌ 拉取失败: ${err.message}`, 'error');
       }
     });
   }
@@ -3357,6 +3382,13 @@ function closeAuthModal() {
 function openUserProfileModal() {
   renderAuthStatus();
   if ($('userProfileBackdrop')) $('userProfileBackdrop').classList.add('open');
+  // 实时刷新云端乐谱与打卡统计，避免显示旧的 0
+  const sync = window.SupabaseSyncService;
+  if (sync && sync.isLoggedIn()) {
+    sync.fetchCloudScores().then(cloudScores => {
+      if ($('syncCloudCount')) $('syncCloudCount').textContent = cloudScores.length;
+    }).catch(e => console.warn('Refresh cloud score count warning:', e));
+  }
 }
 
 function closeUserProfileModal() {
@@ -3594,17 +3626,19 @@ async function performFullSync(silent = false) {
   if (!silent) toast('🔄 正在同步云端乐谱与个性化配置...', 'info');
 
   try {
-    // 0. 同步云端用户配置（背景壁纸、模糊度、主题、自定义分类）
-    const cloudSettings = sync.fetchUserSettings();
-    if (cloudSettings) {
-      await applyCloudSettings(cloudSettings);
+    // 0. 从服务器获取最新的云端用户个性化配置（避免本地 session 缓存过旧）
+    const freshSettings = await sync.fetchFreshUserSettings();
+    if (freshSettings && Object.keys(freshSettings).length > 0) {
+      await applyCloudSettings(freshSettings);
     } else {
-      // 若云端尚无配置，将本地当前配置上报至云端
+      // 若云端尚无配置，且本地有配置，将本地当前配置上报至云端
       await syncSettingsToCloud();
     }
 
     // 1. 同步本地自定义分类到云端
-    await syncSettingsToCloud();
+    if (S.categories && S.categories.length > 0) {
+      await syncSettingsToCloud();
+    }
 
     // 2. 拉取云端乐谱并合并
     const cloudScores = await sync.fetchCloudScores();
@@ -3625,7 +3659,7 @@ async function performFullSync(silent = false) {
       S.scores = [];
     }
 
-    // 上传本地乐谱
+    // 上传本地乐谱到云端
     for (const score of S.scores) {
       await sync.uploadSingleScoreToCloud(score);
     }
@@ -3635,10 +3669,14 @@ async function performFullSync(silent = false) {
       await sync.uploadSingleCheckinToCloud(chk);
     }
 
+    // 再次从云端获取最新合并后的乐谱数据
+    const latestCloudScores = await sync.fetchCloudScores();
+    if ($('syncCloudCount')) $('syncCloudCount').textContent = latestCloudScores.length;
+
     // 将云端乐谱合并到本地
     const localScoreMap = new Map(S.scores.map(s => [String(s.id), s]));
     let scoreChanged = false;
-    for (const cs of cloudScores) {
+    for (const cs of latestCloudScores) {
       const local = localScoreMap.get(String(cs.id));
       if (!local || (cs.updatedAt && cs.updatedAt > (local.updatedAt || 0)) || local.categoryId !== cs.categoryId) {
         localScoreMap.set(String(cs.id), cs);
@@ -3669,15 +3707,18 @@ async function performFullSync(silent = false) {
       renderPracticeHistory();
     }
 
+    if ($('syncLocalCount')) $('syncLocalCount').textContent = S.scores.length;
+    if ($('syncCheckinCount')) $('syncCheckinCount').textContent = S.checkins.length;
+
     sync.setLastSyncTime(new Date().toISOString());
     sync.isSyncing = false;
     sync.notifyStateChange();
-    if (!silent) toast('🎉 云端数据同步完成！乐谱与配置已就绪', 'success');
+    if (!silent) toast('🎉 双向数据同步完成！乐谱、分类与背景配置已就绪', 'success');
   } catch (err) {
-    console.warn('Sync failed', err);
+    console.error('Sync failed', err);
     sync.isSyncing = false;
     sync.notifyStateChange();
-    if (!silent) toast(`同步失败: ${err.message}`, 'error');
+    if (!silent) toast(`❌ 同步失败: ${err.message}`, 'error');
   }
 }
 
