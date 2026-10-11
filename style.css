@@ -1609,7 +1609,10 @@ body{background:var(--bg0);color:var(--txt1)}
   .sync-stats-grid{grid-template-columns:repeat(2,1fr)}
 }
 
-/* ░░░ ELECTRONIC METRONOME STYLES ░░░ */
+/* ░░░ ELECTRONIC METRONOME & TUNER STYLES ░░░ */
+#metronomeBackdrop, #tunerBackdrop {
+  z-index: 500;
+}
 .metro-header-icon{
   font-size:24px;line-height:1;width:38px;height:38px;border-radius:10px;
   background:var(--primary-dim);display:flex;align-items:center;justify-content:center;
@@ -1765,5 +1768,237 @@ body{background:var(--bg0);color:var(--txt1)}
   border:none;font-size:13px;display:flex;align-items:center;justify-content:center;
   cursor:pointer;
 }
+
+/* ░░░ INSTRUMENT TUNER STYLES ░░░ */
+.tuner-header-icon{
+  font-size:24px;line-height:1;width:38px;height:38px;border-radius:10px;
+  background:rgba(16,185,129,.15);color:#10b981;display:flex;align-items:center;justify-content:center;
+}
+
+/* Mode Switcher */
+.tuner-mode-row{
+  margin-bottom:12px;
+}
+.tuner-pill-group{
+  display:flex;flex-wrap:wrap;gap:6px;
+}
+.tuner-opt-pill{
+  padding:5px 11px;border-radius:var(--r-sm);font-size:12px;font-weight:500;
+  background:var(--bg2);border:1px solid var(--border);color:var(--txt2);
+  cursor:pointer;transition:all var(--ease);
+}
+.tuner-opt-pill:hover{background:var(--bg3);color:var(--txt1)}
+.tuner-opt-pill.active{
+  background:rgba(16,185,129,.15);border-color:#10b981;color:#10b981;font-weight:700;
+}
+
+/* String Presets Bar */
+.tuner-strings-wrap{
+  background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-sm);
+  padding:10px 12px;margin-bottom:12px;
+}
+.tuner-strings-label{
+  font-size:11px;color:var(--txt3);margin-bottom:6px;font-weight:600;
+}
+.tuner-strings-row{
+  display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;
+}
+.tuner-string-pill{
+  padding:6px 10px;border-radius:8px;background:var(--bg3);border:1px solid var(--border);
+  color:var(--txt2);font-size:12px;font-weight:600;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;gap:2px;min-width:44px;
+  transition:all var(--ease);flex-shrink:0;
+}
+.tuner-string-pill:hover{border-color:var(--primary);color:var(--txt1)}
+.tuner-string-pill.active{
+  background:rgba(56,189,248,.18);border-color:#38bdf8;color:#38bdf8;transform:scale(1.05);
+}
+.tuner-string-pill.in-tune{
+  background:rgba(16,185,129,.22);border-color:#10b981;color:#10b981;transform:scale(1.08);
+  box-shadow:0 0 10px rgba(16,185,129,.4);
+}
+.tuner-string-num{font-size:10px;opacity:0.75}
+.tuner-string-note{font-size:13px;font-weight:800}
+
+/* Cent Deviation Gauge */
+.tuner-gauge-card{
+  background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-md);
+  padding:14px 16px;margin-bottom:14px;
+}
+.tuner-scale-labels{
+  display:flex;justify-content:space-between;font-size:11px;font-weight:600;
+  color:var(--txt3);margin-bottom:8px;
+}
+.tuner-scale-center{color:#10b981;font-weight:700}
+.tuner-meter-track{
+  position:relative;height:12px;border-radius:6px;background:var(--bg1);
+  border:1px solid var(--border);overflow:hidden;
+}
+.tuner-in-tune-zone{
+  position:absolute;left:45%;width:10%;height:100%;
+  background:rgba(16,185,129,.25);border-left:1px dashed #10b981;border-right:1px dashed #10b981;
+}
+.tuner-center-pip{
+  position:absolute;left:50%;top:0;bottom:0;width:2px;background:#10b981;
+  transform:translateX(-50%);z-index:2;box-shadow:0 0 6px #10b981;
+}
+.tuner-needle{
+  position:absolute;left:50%;top:-4px;bottom:-4px;width:6px;border-radius:3px;
+  background:#9ca3af;transform:translateX(-50%);z-index:3;
+  transition:left 0.1s cubic-bezier(0.1, 0.9, 0.2, 1), background-color 0.15s ease;
+  box-shadow:0 0 8px rgba(0,0,0,.6);
+}
+.tuner-needle.in-tune{background:#10b981;box-shadow:0 0 14px #10b981;width:8px}
+.tuner-needle.flat{background:#f59e0b;box-shadow:0 0 10px #f59e0b}
+.tuner-needle.sharp{background:#ef4444;box-shadow:0 0 10px #ef4444}
+
+/* Hero Note Display */
+.tuner-note-hero{
+  text-align:center;margin-bottom:14px;
+}
+.tuner-note-box{
+  display:inline-flex;align-items:baseline;justify-content:center;
+}
+.tuner-note-name{
+  font-size:58px;font-weight:900;color:var(--txt1);letter-spacing:-1px;line-height:1;
+  font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;
+  transition:all 0.15s ease;min-width:60px;display:inline-block;
+}
+.tuner-note-name.in-tune{
+  color:#10b981;text-shadow:0 0 24px rgba(16,185,129,.6);animation:tuner-pop 0.3s ease;
+}
+.tuner-note-name.flat{color:#f59e0b}
+.tuner-note-name.sharp{color:#ef4444}
+@keyframes tuner-pop{
+  0%{transform:scale(0.95)}
+  50%{transform:scale(1.08)}
+  100%{transform:scale(1)}
+}
+.tuner-note-octave{
+  font-size:22px;font-weight:700;color:var(--txt3);margin-left:4px;
+}
+.tuner-solfege-tag{
+  font-size:13px;font-weight:600;color:var(--txt2);margin-top:2px;
+}
+.tuner-status-badge{
+  display:inline-block;padding:4px 14px;border-radius:14px;font-size:12px;font-weight:700;
+  margin-top:8px;transition:all var(--ease);
+}
+.tuner-status-badge.idle{
+  background:var(--bg2);color:var(--txt3);border:1px solid var(--border);
+}
+.tuner-status-badge.in_tune{
+  background:rgba(16,185,129,.18);color:#10b981;border:1px solid rgba(16,185,129,.4);
+  box-shadow:0 0 12px rgba(16,185,129,.35);
+}
+.tuner-status-badge.flat{
+  background:rgba(245,158,11,.18);color:#f59e0b;border:1px solid rgba(245,158,11,.4);
+}
+.tuner-status-badge.sharp{
+  background:rgba(239,68,68,.18);color:#ef4444;border:1px solid rgba(239,68,68,.4);
+}
+
+/* Metrics Grid */
+.tuner-metrics-grid{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;
+}
+.tuner-metric-card{
+  background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-sm);
+  padding:8px 10px;text-align:center;
+}
+.tuner-metric-label{font-size:11px;color:var(--txt3);font-weight:600}
+.tuner-metric-val{
+  font-size:15px;font-weight:800;color:var(--txt1);margin-top:3px;
+  font-variant-numeric:tabular-nums;
+}
+.tuner-metric-val small{font-size:11px;font-weight:500;color:var(--txt3)}
+
+/* Calibration & Tools Card */
+.tuner-tools-card{
+  background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-sm);
+  padding:12px 14px;margin-bottom:14px;
+}
+.tuner-tool-row{
+  display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+}
+.tuner-tool-title{
+  font-size:12px;font-weight:600;color:var(--txt2);
+}
+.tuner-a4-stepper{
+  display:flex;align-items:center;gap:4px;
+}
+.tuner-a4-display{
+  font-size:13px;font-weight:800;color:var(--txt1);min-width:54px;text-align:center;
+  font-variant-numeric:tabular-nums;
+}
+.tuner-a4-presets{
+  display:flex;gap:4px;margin-left:auto;
+}
+.tuner-a4-btn{
+  padding:3px 8px;border-radius:10px;background:var(--bg3);border:1px solid var(--border);
+  color:var(--txt2);font-size:11px;font-weight:600;cursor:pointer;transition:all var(--ease);
+}
+.tuner-a4-btn.active{
+  background:var(--primary-dim);border-color:var(--primary);color:var(--primary);
+}
+.tuner-tone-toggle-btn{
+  padding:6px 14px;border-radius:16px;background:var(--bg3);border:1px solid var(--border);
+  color:var(--txt1);font-size:12px;font-weight:600;cursor:pointer;transition:all var(--ease);
+  display:inline-flex;align-items:center;gap:6px;
+}
+.tuner-tone-toggle-btn:hover{border-color:var(--primary)}
+.tuner-tone-toggle-btn.playing{
+  background:rgba(56,189,248,.2);border-color:#38bdf8;color:#38bdf8;
+  box-shadow:0 0 10px rgba(56,189,248,.4);animation:pulse-sync 1s infinite alternate;
+}
+
+/* Big Mic Action Button */
+.tuner-big-mic-btn{
+  width:100%;padding:14px;border-radius:var(--r-md);font-size:16px;font-weight:700;
+  background:#10b981;color:#fff;border:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  box-shadow:0 4px 18px rgba(16,185,129,.4);transition:all var(--ease);
+}
+.tuner-big-mic-btn:hover{transform:translateY(-1px);filter:brightness(1.08)}
+.tuner-big-mic-btn.listening{
+  background:#ef4444;box-shadow:0 4px 18px rgba(239,68,68,.5);animation:pulse-sync 1.5s infinite alternate;
+}
+
+/* Floating Mini Tuner Widget (Bottom Left) */
+.tuner-mini-widget{
+  position:fixed;bottom:24px;left:24px;z-index:9999;
+  display:flex;align-items:center;gap:8px;padding:8px 14px;
+  background:rgba(20,24,36,.88);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  border:1px solid rgba(255,255,255,.14);border-radius:24px;
+  box-shadow:0 8px 28px rgba(0,0,0,.5);animation:fade-in 0.25s ease;
+}
+.tuner-mini-indicator{
+  width:10px;height:10px;border-radius:50%;background:#9ca3af;transition:all 0.08s ease;
+}
+.tuner-mini-indicator.listening{background:#34d399;box-shadow:0 0 10px #34d399}
+.tuner-mini-indicator.in-tune{background:#10b981;box-shadow:0 0 14px #10b981;transform:scale(1.3)}
+.tuner-mini-indicator.flat{background:#f59e0b;box-shadow:0 0 10px #f59e0b}
+.tuner-mini-indicator.sharp{background:#ef4444;box-shadow:0 0 10px #ef4444}
+.tuner-mini-info{
+  display:flex;align-items:baseline;gap:6px;
+}
+.tuner-mini-note{
+  font-size:13px;font-weight:800;color:#f3f4f6;font-family:monospace;
+}
+.tuner-mini-status{
+  font-size:11px;color:#9ca3af;
+}
+.tuner-mini-mic{
+  width:28px;height:28px;border-radius:50%;background:#10b981;color:#fff;
+  border:none;font-size:12px;display:flex;align-items:center;justify-content:center;
+  cursor:pointer;transition:all var(--ease);
+}
+.tuner-mini-mic.listening{background:#ef4444}
+.tuner-mini-expand{
+  width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,.08);color:#d1d5db;
+  border:none;font-size:13px;display:flex;align-items:center;justify-content:center;
+  cursor:pointer;
+}
+
 
 

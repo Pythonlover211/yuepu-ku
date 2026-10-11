@@ -106,6 +106,15 @@
         <span class="nav-item-text">电子节拍器</span>
         <span class="badge" id="badgeMetronomeState">100 BPM</span>
       </button>
+      <button class="nav-item" id="navTuner" title="乐器高精度调音器">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/>
+          <path d="M12 7v5l3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <span class="nav-item-text">乐器调音器</span>
+        <span class="badge" id="badgeTunerState">440 Hz</span>
+      </button>
     </div>
 
     <!-- Categories -->
@@ -508,6 +517,10 @@
       <!-- 电子节拍器快速开关 -->
       <button class="viewer-btn" id="viewerMetronomeBtn" title="打开电子节拍器">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2L4 20h16L12 2z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 18l4-10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="16" cy="8" r="1.5" fill="currentColor"/></svg>
+      </button>
+      <!-- 乐器调音器快速开关 -->
+      <button class="viewer-btn" id="viewerTunerBtn" title="打开乐器调音器">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 7v5l3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       </button>
       <!-- 页面缩略图目录 -->
       <button class="viewer-btn" id="viewerThumbsBtn" title="查看所有页面缩略图">
@@ -1240,11 +1253,144 @@
   <button type="button" class="metro-mini-expand" id="metroMiniExpandBtn" title="展开全功能面板">⤢</button>
 </div>
 
+<!-- ░░░ INSTRUMENT TUNER MODAL ░░░ -->
+<div class="modal-backdrop" id="tunerBackdrop">
+  <div class="modal modal-md tuner-modal" id="tunerModal">
+    <div class="modal-header">
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="tuner-header-icon">🎸</div>
+        <div>
+          <h2>乐器调音器</h2>
+          <p class="modal-subtitle">实时高精度拾音 · 零延迟音高识别 · 准音自动提示</p>
+        </div>
+      </div>
+      <button class="icon-btn modal-close" id="tunerCloseBtn" title="关闭">✕</button>
+    </div>
+
+    <div class="modal-body" style="padding-bottom:18px">
+      <!-- Instrument Mode Selector -->
+      <div class="tuner-mode-row">
+        <div class="tuner-pill-group" id="tunerModeGroup">
+          <button type="button" class="tuner-opt-pill active" data-mode="chromatic">🎹 十二平均律</button>
+          <button type="button" class="tuner-opt-pill" data-mode="guitar">🎸 吉他</button>
+          <button type="button" class="tuner-opt-pill" data-mode="violin">🎻 小提琴</button>
+          <button type="button" class="tuner-opt-pill" data-mode="ukulele">🪕 尤克里里</button>
+          <button type="button" class="tuner-opt-pill" data-mode="cello">🎻 大提琴</button>
+        </div>
+      </div>
+
+      <!-- Instrument String Buttons (Guitar/Violin/Ukulele/Cello) -->
+      <div class="tuner-strings-wrap" id="tunerStringsWrap" style="display:none">
+        <div class="tuner-strings-label">弦位目标音 (点击可试听参考音)：</div>
+        <div class="tuner-strings-row" id="tunerStringsRow"></div>
+      </div>
+
+      <!-- Dial / Gauge Meter (Cent deviation meter) -->
+      <div class="tuner-gauge-card" id="tunerGaugeCard">
+        <div class="tuner-scale-labels">
+          <span>-50</span>
+          <span>-30</span>
+          <span>-15</span>
+          <span class="tuner-scale-center">0 准音</span>
+          <span>+15</span>
+          <span>+30</span>
+          <span>+50</span>
+        </div>
+        <div class="tuner-meter-track">
+          <div class="tuner-in-tune-zone"></div>
+          <div class="tuner-needle" id="tunerNeedle"></div>
+          <div class="tuner-center-pip"></div>
+        </div>
+      </div>
+
+      <!-- Hero Note Display -->
+      <div class="tuner-note-hero" id="tunerNoteHero">
+        <div class="tuner-note-box">
+          <span class="tuner-note-name" id="tunerNoteName">--</span>
+          <span class="tuner-note-octave" id="tunerNoteOctave"></span>
+        </div>
+        <div class="tuner-solfege-tag" id="tunerSolfege">等待拾音</div>
+        <div class="tuner-status-badge idle" id="tunerStatusBadge">请点击开始拾音</div>
+      </div>
+
+      <!-- Frequency & Cent Readout Metrics -->
+      <div class="tuner-metrics-grid">
+        <div class="tuner-metric-card">
+          <div class="tuner-metric-label">当前频率</div>
+          <div class="tuner-metric-val"><span id="tunerRealFreq">--</span> <small>Hz</small></div>
+        </div>
+        <div class="tuner-metric-card">
+          <div class="tuner-metric-label">目标基准</div>
+          <div class="tuner-metric-val"><span id="tunerTargetFreq">--</span> <small>Hz</small></div>
+        </div>
+        <div class="tuner-metric-card">
+          <div class="tuner-metric-label">音分偏差</div>
+          <div class="tuner-metric-val"><span id="tunerCentsVal">0.0</span> <small>cents</small></div>
+        </div>
+      </div>
+
+      <!-- Calibration & Pitch Pipe Tools -->
+      <div class="tuner-tools-card">
+        <!-- A4 Calibration -->
+        <div class="tuner-tool-row">
+          <span class="tuner-tool-title">🎯 A4 标准音基准:</span>
+          <div class="tuner-a4-stepper">
+            <button type="button" class="metro-step-btn" id="tunerA4Minus">-1</button>
+            <span class="tuner-a4-display" id="tunerA4Display">440 Hz</span>
+            <button type="button" class="metro-step-btn" id="tunerA4Plus">+1</button>
+          </div>
+          <div class="tuner-a4-presets">
+            <button type="button" class="tuner-a4-btn" data-a4="432">432</button>
+            <button type="button" class="tuner-a4-btn active" data-a4="440">440</button>
+            <button type="button" class="tuner-a4-btn" data-a4="442">442</button>
+          </div>
+        </div>
+
+        <!-- Reference Tone Generator -->
+        <div class="tuner-tool-row" style="margin-top:10px;justify-content:space-between">
+          <span class="tuner-tool-title">🔊 耳听调弦 (音叉参考音):</span>
+          <button type="button" class="tuner-tone-toggle-btn" id="tunerToneToggleBtn">
+            <span id="tunerToneIcon">🔊</span>
+            <span id="tunerToneLabel">播放 A4 (440Hz)</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Big Action: Start/Stop Mic Listening -->
+      <div class="tuner-action-row" style="margin-top:16px">
+        <button type="button" class="tuner-big-mic-btn" id="tunerBigMicBtn">
+          <span class="tuner-mic-icon" id="tunerMicIcon">🎤</span>
+          <span class="tuner-mic-label" id="tunerMicLabel">开始拾音</span>
+        </button>
+      </div>
+
+      <!-- Bottom link: Minimize to floating pill -->
+      <div style="text-align:center;margin-top:12px">
+        <button type="button" class="link-btn" id="tunerFloatBtn" style="font-size:12.5px;color:var(--txt3)">
+          📌 缩小为悬浮窗（看谱时不遮挡）
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ░░░ FLOATING MINI TUNER WIDGET ░░░ -->
+<div class="tuner-mini-widget" id="tunerMiniWidget" style="display:none">
+  <div class="tuner-mini-indicator" id="tunerMiniIndicator"></div>
+  <div class="tuner-mini-info" id="tunerMiniInfo">
+    <span class="tuner-mini-note" id="tunerMiniNote">--</span>
+    <span class="tuner-mini-status" id="tunerMiniStatus">待拾音</span>
+  </div>
+  <button type="button" class="tuner-mini-mic" id="tunerMiniMicBtn" title="切换拾音">🎤</button>
+  <button type="button" class="tuner-mini-expand" id="tunerMiniExpandBtn" title="展开全功能面板">⤢</button>
+</div>
+
 <!-- ░░░ TOAST ░░░ -->
 <div class="toast-container" id="toastContainer"></div>
 
 <script src="supabase-client.js"></script>
 <script src="metronome.js"></script>
+<script src="tuner.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

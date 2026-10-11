@@ -3244,7 +3244,7 @@ function initMetronomeUI() {
   if ($('navMetronome')) {
     $('navMetronome').addEventListener('click', () => {
       openMetronomeModal();
-      closeSidebar();
+      if (window.innerWidth <= 768) closeMobileSidebar();
     });
   }
   if ($('viewerMetronomeBtn')) {
@@ -3463,6 +3463,297 @@ function handleMetronomeTick(payload) {
   }
 }
 
+// ─────────────────────────────────────────
+// 🎸 TUNER CONTROLLER
+// ─────────────────────────────────────────
+function initTunerUI() {
+  if (!window.musicTuner) return;
+  const tuner = window.musicTuner;
+
+  // Bind state and pitch listeners
+  tuner.onStateChange = renderTunerState;
+  tuner.onPitchUpdate = handleTunerPitch;
+  tuner.onError = (err) => toast(err, 'error');
+
+  // Trigger from sidebar
+  if ($('navTuner')) {
+    $('navTuner').addEventListener('click', () => {
+      openTunerModal();
+      if (window.innerWidth <= 768) closeMobileSidebar();
+    });
+  }
+
+  // Trigger from score viewer
+  if ($('viewerTunerBtn')) {
+    $('viewerTunerBtn').addEventListener('click', openTunerModal);
+  }
+
+  // Close modal
+  if ($('tunerCloseBtn')) $('tunerCloseBtn').addEventListener('click', closeTunerModal);
+  if ($('tunerBackdrop')) {
+    $('tunerBackdrop').addEventListener('click', (e) => {
+      if (e.target === $('tunerBackdrop')) closeTunerModal();
+    });
+  }
+
+  // Instrument Mode pills
+  const modePills = document.querySelectorAll('#tunerModeGroup .tuner-opt-pill');
+  modePills.forEach(pill => {
+    pill.addEventListener('click', () => {
+      modePills.forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      tuner.setMode(pill.dataset.mode);
+      renderTunerStringsBar(tuner.currentMode);
+    });
+  });
+
+  // A4 calibration stepper & presets
+  if ($('tunerA4Minus')) $('tunerA4Minus').addEventListener('click', () => tuner.setA4(tuner.a4Freq - 1));
+  if ($('tunerA4Plus')) $('tunerA4Plus').addEventListener('click', () => tuner.setA4(tuner.a4Freq + 1));
+  const a4Btns = document.querySelectorAll('.tuner-a4-btn');
+  a4Btns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      a4Btns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      tuner.setA4(Number(btn.dataset.a4));
+    });
+  });
+
+  // Pitch pipe tone button
+  if ($('tunerToneToggleBtn')) {
+    $('tunerToneToggleBtn').addEventListener('click', () => {
+      tuner.toggleTone(tuner.selectedToneNote || 'A4');
+    });
+  }
+
+  // Main Mic Big Button & Mini Mic Button
+  if ($('tunerBigMicBtn')) {
+    $('tunerBigMicBtn').addEventListener('click', async () => {
+      try {
+        await tuner.toggleListening();
+      } catch (e) {
+        toast(e.message || '麦克风启动失败', 'error');
+      }
+    });
+  }
+  if ($('tunerMiniMicBtn')) {
+    $('tunerMiniMicBtn').addEventListener('click', async () => {
+      try {
+        await tuner.toggleListening();
+      } catch (e) {
+        toast(e.message || '麦克风启动失败', 'error');
+      }
+    });
+  }
+
+  // Float button & Expand button
+  if ($('tunerFloatBtn')) {
+    $('tunerFloatBtn').addEventListener('click', () => {
+      closeTunerModal();
+      if ($('tunerMiniWidget')) $('tunerMiniWidget').style.display = 'flex';
+      toast('📌 调音器已缩小为左下角悬浮窗', 'info');
+    });
+  }
+  if ($('tunerMiniExpandBtn')) {
+    $('tunerMiniExpandBtn').addEventListener('click', () => {
+      if ($('tunerMiniWidget')) $('tunerMiniWidget').style.display = 'none';
+      openTunerModal();
+    });
+  }
+
+  // Initial render
+  renderTunerStringsBar(tuner.currentMode);
+  renderTunerState({
+    isListening: tuner.isListening,
+    isPlayingTone: tuner.isPlayingTone,
+    a4Freq: tuner.a4Freq,
+    currentMode: tuner.currentMode,
+    selectedToneNote: tuner.selectedToneNote
+  });
+}
+
+function openTunerModal() {
+  if ($('tunerBackdrop')) $('tunerBackdrop').classList.add('open');
+  if ($('tunerMiniWidget')) $('tunerMiniWidget').style.display = 'none';
+}
+
+function closeTunerModal() {
+  if ($('tunerBackdrop')) $('tunerBackdrop').classList.remove('open');
+  const tuner = window.musicTuner;
+  if (tuner && tuner.isListening) {
+    if ($('tunerMiniWidget')) $('tunerMiniWidget').style.display = 'flex';
+  }
+}
+
+function renderTunerStringsBar(mode) {
+  const wrap = $('tunerStringsWrap');
+  const row = $('tunerStringsRow');
+  if (!wrap || !row) return;
+
+  const preset = window.TUNER_PRESETS ? window.TUNER_PRESETS[mode] : null;
+  if (!preset || !preset.strings || preset.strings.length === 0) {
+    wrap.style.display = 'none';
+    row.innerHTML = '';
+    return;
+  }
+
+  wrap.style.display = 'block';
+  row.innerHTML = '';
+  preset.strings.forEach(str => {
+    const pill = document.createElement('button');
+    pill.type = 'button';
+    pill.className = 'tuner-string-pill';
+    pill.dataset.note = str.note;
+    pill.innerHTML = `<span class="tuner-string-num">${str.label}</span><span class="tuner-string-note">${str.note}</span>`;
+    pill.addEventListener('click', () => {
+      // 点击可试听该弦参考音
+      window.musicTuner.playTone(str.note);
+      toast(`🔊 正在播放 ${str.label} (${str.note}) 参考音`, 'info');
+    });
+    row.appendChild(pill);
+  });
+}
+
+function renderTunerState(s) {
+  const tuner = window.musicTuner;
+  if (!tuner) return;
+
+  // A4 display
+  if ($('tunerA4Display')) $('tunerA4Display').textContent = `${s.a4Freq} Hz`;
+  if ($('badgeTunerState')) {
+    $('badgeTunerState').textContent = s.isListening ? '🎤 拾音中' : `${s.a4Freq} Hz`;
+  }
+
+  // Big Mic Button
+  const bigMicBtn = $('tunerBigMicBtn');
+  const miniMicBtn = $('tunerMiniMicBtn');
+  if (bigMicBtn) {
+    if (s.isListening) {
+      bigMicBtn.classList.add('listening');
+      if ($('tunerMicIcon')) $('tunerMicIcon').textContent = '⏹';
+      if ($('tunerMicLabel')) $('tunerMicLabel').textContent = '停止拾音';
+    } else {
+      bigMicBtn.classList.remove('listening');
+      if ($('tunerMicIcon')) $('tunerMicIcon').textContent = '🎤';
+      if ($('tunerMicLabel')) $('tunerMicLabel').textContent = '开始拾音';
+    }
+  }
+  if (miniMicBtn) {
+    if (s.isListening) {
+      miniMicBtn.classList.add('listening');
+      miniMicBtn.textContent = '⏹';
+    } else {
+      miniMicBtn.classList.remove('listening');
+      miniMicBtn.textContent = '🎤';
+    }
+  }
+
+  // Tone Generator Button
+  const toneBtn = $('tunerToneToggleBtn');
+  if (toneBtn) {
+    if (s.isPlayingTone) {
+      toneBtn.classList.add('playing');
+      if ($('tunerToneIcon')) $('tunerToneIcon').textContent = '⏹';
+      if ($('tunerToneLabel')) $('tunerToneLabel').textContent = `停止播放 (${s.selectedToneNote || 'A4'})`;
+    } else {
+      toneBtn.classList.remove('playing');
+      if ($('tunerToneIcon')) $('tunerToneIcon').textContent = '🔊';
+      if ($('tunerToneLabel')) $('tunerToneLabel').textContent = `播放参考音 (${s.selectedToneNote || 'A4'})`;
+    }
+  }
+}
+
+function handleTunerPitch(info) {
+  const needle = $('tunerNeedle');
+  const noteName = $('tunerNoteName');
+  const noteOctave = $('tunerNoteOctave');
+  const solfege = $('tunerSolfege');
+  const statusBadge = $('tunerStatusBadge');
+  const realFreq = $('tunerRealFreq');
+  const targetFreq = $('tunerTargetFreq');
+  const centsVal = $('tunerCentsVal');
+
+  // Mini widget elements
+  const miniInd = $('tunerMiniIndicator');
+  const miniNote = $('tunerMiniNote');
+  const miniStatus = $('tunerMiniStatus');
+
+  if (!info.hasSignal) {
+    if (needle) {
+      needle.style.left = '50%';
+      needle.className = 'tuner-needle';
+    }
+    if (noteName) {
+      noteName.textContent = '--';
+      noteName.className = 'tuner-note-name';
+    }
+    if (noteOctave) noteOctave.textContent = '';
+    if (solfege) solfege.textContent = '等待音高输入…';
+    if (statusBadge) {
+      statusBadge.textContent = '请弹奏或哼唱单音';
+      statusBadge.className = 'tuner-status-badge idle';
+    }
+    if (realFreq) realFreq.textContent = '--';
+    if (targetFreq) targetFreq.textContent = '--';
+    if (centsVal) centsVal.textContent = '0.0';
+
+    if (miniInd) miniInd.className = 'tuner-mini-indicator listening';
+    if (miniNote) miniNote.textContent = '--';
+    if (miniStatus) miniStatus.textContent = '拾音中';
+    return;
+  }
+
+  // Update needle position (-50 cents = 0%, 0 = 50%, +50 cents = 100%)
+  const clampedCents = Math.max(-50, Math.min(50, info.cents));
+  const percent = 50 + (clampedCents / 50) * 45; // 5% to 95% range
+  if (needle) {
+    needle.style.left = `${percent}%`;
+    needle.className = `tuner-needle ${info.status}`;
+  }
+
+  // Note and Octave
+  if (noteName) {
+    noteName.textContent = info.noteName;
+    noteName.className = `tuner-note-name ${info.status}`;
+  }
+  if (noteOctave) noteOctave.textContent = info.octave;
+  if (solfege) solfege.textContent = `${info.solfege} (${info.fullNote})`;
+
+  // Status badge
+  if (statusBadge) {
+    statusBadge.className = `tuner-status-badge ${info.status}`;
+    if (info.inTune) {
+      statusBadge.textContent = '✨ 音准正确 (In Tune)';
+    } else if (info.cents < 0) {
+      statusBadge.textContent = `偏低 ♭ ${Math.abs(info.cents)} 音分`;
+    } else {
+      statusBadge.textContent = `偏高 ♯ ${info.cents} 音分`;
+    }
+  }
+
+  // Frequency metrics
+  if (realFreq) realFreq.textContent = info.freq.toFixed(1);
+  if (targetFreq) targetFreq.textContent = info.targetFreq.toFixed(1);
+  if (centsVal) centsVal.textContent = (info.cents > 0 ? `+${info.cents.toFixed(1)}` : info.cents.toFixed(1));
+
+  // Instrument String highlighting
+  const stringPills = document.querySelectorAll('.tuner-string-pill');
+  stringPills.forEach(p => {
+    p.classList.remove('active', 'in-tune');
+    if (info.matchedString && p.dataset.note === info.matchedString.note) {
+      p.classList.add('active');
+      if (info.inTune) p.classList.add('in-tune');
+    }
+  });
+
+  // Mini floating widget update
+  if (miniInd) miniInd.className = `tuner-mini-indicator ${info.status}`;
+  if (miniNote) miniNote.textContent = `${info.noteName}${info.octave}`;
+  if (miniStatus) {
+    miniStatus.textContent = info.inTune ? '准' : (info.cents < 0 ? '偏低' : '偏高');
+  }
+}
+
 async function boot(){
   try{
     await initDB();
@@ -3481,6 +3772,7 @@ async function boot(){
     bindEvents();
     initAuthAndSync();
     initMetronomeUI();
+    initTunerUI();
     updateReminderUIStatus();
     renderAll();
     // Daily reminder periodic checker
