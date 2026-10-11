@@ -179,12 +179,29 @@
         <option value="name-asc">名称 A→Z</option>
         <option value="name-desc">名称 Z→A</option>
       </select>
+      <button class="batch-topbar-btn" id="batchToggleBtn" title="批量多选并分类乐谱">
+        <span>☑️</span>
+        <span class="batch-btn-text">批量分类</span>
+      </button>
       <button class="upload-btn" id="uploadBtn">
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="17 8 12 3 7 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="12" y1="3" x2="12" y2="15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
         <span class="upload-btn-text">上传乐谱</span>
       </button>
     </div>
   </header>
+
+  <!-- 批量操作吸顶/悬浮栏 -->
+  <div class="batch-action-bar" id="batchActionBar" style="display:none">
+    <div class="batch-bar-left">
+      <span class="batch-selected-badge" id="batchSelectedCount">已选 0 首</span>
+      <button type="button" class="batch-pill-btn" id="batchSelectAllBtn">全选</button>
+      <button type="button" class="batch-pill-btn" id="batchDeselectAllBtn">清空</button>
+    </div>
+    <div class="batch-bar-right">
+      <button type="button" class="batch-pill-btn primary" id="batchApplyCategoryBtn">📂 移动到分类</button>
+      <button type="button" class="batch-pill-btn close" id="batchCancelBtn" title="退出批量模式">✕ 退出</button>
+    </div>
+  </div>
 
   <!-- Grid -->
   <div class="content-area" id="contentArea">
@@ -1411,6 +1428,43 @@
   </div>
   <button type="button" class="tuner-mini-mic" id="tunerMiniMicBtn" title="切换拾音">🎤</button>
   <button type="button" class="tuner-mini-expand" id="tunerMiniExpandBtn" title="展开全功能面板">⤢</button>
+</div>
+
+<!-- ░░░ 🏷️ SCORE CATEGORY MODAL (单曲/批量乐谱分类选择器) ░░░ -->
+<div class="modal-backdrop" id="scoreCategoryBackdrop">
+  <div class="modal modal-sm" id="scoreCategoryModal" style="max-width:440px">
+    <div class="modal-header">
+      <h2 id="scoreCategoryModalTitle">🏷️ 设置乐谱分类</h2>
+      <button class="icon-btn" id="scoreCategoryModalClose">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p class="modal-desc" id="scoreCategoryTargetDesc" style="font-size:13px;color:var(--txt2);margin-bottom:12px">
+        请选择目标分类：
+      </p>
+      <div class="category-picker-grid" id="categoryPickerGrid">
+        <!-- 动态生成分类选项卡片 -->
+      </div>
+
+      <!-- 快速新建分类 -->
+      <div class="quick-new-cat-box" style="margin-top:16px;padding-top:14px;border-top:1px dashed var(--border)">
+        <div style="font-size:12px;color:var(--txt3);margin-bottom:8px">没有合适的分类？快速新建：</div>
+        <div style="display:flex;gap:8px">
+          <input type="text" id="quickNewCatEmoji" value="🎵" style="width:48px;text-align:center;font-size:16px;padding:6px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--txt1)" />
+          <input type="text" id="quickNewCatName" placeholder="如：考级曲目、练习曲..." maxlength="20" style="flex:1;font-size:13px;padding:6px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg2);color:var(--txt1)" />
+          <button type="button" class="btn btn-secondary" id="quickNewCatBtn" style="padding:6px 12px;font-size:12px;white-space:nowrap">新建并选定</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer" style="display:flex;justify-content:space-between;align-items:center">
+      <button type="button" class="btn btn-secondary" id="scoreCategoryRemoveBtn" style="color:#ef4444;border-color:rgba(239,68,68,.35)">移出分类 (设为未分类)</button>
+      <div style="display:flex;gap:8px">
+        <button type="button" class="btn btn-secondary" id="scoreCategoryCancelBtn">取消</button>
+        <button type="button" class="btn btn-primary" id="scoreCategoryConfirmBtn">确定保存</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ░░░ TOAST ░░░ -->

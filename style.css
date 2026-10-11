@@ -2164,5 +2164,232 @@ body{background:var(--bg0);color:var(--txt1)}
   cursor:pointer;
 }
 
+/* ==============================================================================
+   🏷️ SCORE CATEGORIZATION & BATCH MANAGEMENT STYLES
+   ============================================================================== */
+
+/* Topbar Batch Button */
+.batch-topbar-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--txt1);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--ease);
+}
+.batch-topbar-btn:hover {
+  background: var(--bg3);
+  border-color: var(--primary);
+  transform: translateY(-1px);
+}
+.batch-topbar-btn.active {
+  background: var(--primary-dim);
+  border-color: var(--primary);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+/* Floating Batch Action Bar */
+.batch-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  margin: 10px 16px 4px 16px;
+  background: rgba(30, 41, 59, 0.94);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(167, 139, 250, 0.35);
+  border-radius: var(--r-md);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+  animation: slide-down 0.2s ease;
+  z-index: 50;
+}
+.batch-bar-left, .batch-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.batch-selected-badge {
+  font-size: 13px;
+  font-weight: 700;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.15);
+  padding: 4px 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
+.batch-pill-btn {
+  padding: 5px 12px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 500;
+  background: var(--bg3);
+  color: var(--txt1);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all var(--ease);
+}
+.batch-pill-btn:hover {
+  background: var(--primary-dim);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.batch-pill-btn.primary {
+  background: linear-gradient(135deg, var(--primary), #8b5cf6);
+  color: #fff;
+  border: none;
+  font-weight: 600;
+  box-shadow: 0 2px 10px rgba(139, 92, 246, 0.35);
+}
+.batch-pill-btn.primary:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+.batch-pill-btn.close {
+  background: transparent;
+  color: var(--txt3);
+  border: 1px solid transparent;
+}
+.batch-pill-btn.close:hover {
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.12);
+}
+
+/* Card Selection Mode Checkboxes */
+.batch-mode .score-card {
+  position: relative;
+  cursor: pointer;
+}
+.card-batch-check {
+  display: none;
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(6px);
+  border: 2px solid rgba(255, 255, 255, 0.6);
+  z-index: 10;
+  align-items: center;
+  justify-content: center;
+  color: transparent;
+  font-size: 14px;
+  font-weight: 900;
+  transition: all var(--ease);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+}
+.batch-mode .card-batch-check {
+  display: flex !important;
+}
+.score-card.is-batch-selected {
+  outline: 2px solid var(--primary) !important;
+  box-shadow: 0 0 16px rgba(167, 139, 250, 0.45) !important;
+  transform: translateY(-2px);
+}
+.score-card.is-batch-selected .card-batch-check {
+  background: var(--primary) !important;
+  border-color: #fff !important;
+  color: #fff !important;
+  transform: scale(1.1);
+}
+
+/* Clickable Category Pill on Cards */
+.card-cat-clickable {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  transition: all var(--ease);
+  max-width: 100%;
+}
+.card-cat-clickable:hover {
+  background: var(--primary-dim);
+  border-color: var(--primary);
+  color: var(--primary) !important;
+  transform: translateY(-1px);
+}
+.card-cat-clickable.unclassified {
+  background: rgba(245, 158, 11, 0.14);
+  border: 1px dashed rgba(245, 158, 11, 0.55);
+  color: #f59e0b !important;
+}
+.card-cat-clickable.unclassified:hover {
+  background: rgba(245, 158, 11, 0.25);
+  border-color: #f59e0b;
+}
+.card-cat-chevron {
+  font-size: 9px;
+  opacity: 0.75;
+}
+
+/* Category Picker Modal Grid */
+.category-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 4px 2px;
+}
+.cat-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  background: var(--bg2);
+  border: 1.5px solid var(--border);
+  color: var(--txt1);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--ease);
+  position: relative;
+}
+.cat-picker-item:hover {
+  background: var(--bg3);
+  border-color: var(--primary);
+  transform: translateY(-1px);
+}
+.cat-picker-item.active {
+  background: var(--primary-dim);
+  border-color: var(--primary);
+  color: var(--primary);
+  font-weight: 700;
+}
+.cat-picker-item.active::after {
+  content: '✓';
+  position: absolute;
+  right: 10px;
+  font-weight: 900;
+  color: var(--primary);
+}
+.cat-picker-emoji {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+.cat-picker-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+
 
 

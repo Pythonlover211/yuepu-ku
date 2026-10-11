@@ -56,6 +56,8 @@ const S = {
   folderModalScoreId: null,
   pendingAppendScoreId: null,
   uploadMode: 'new',
+  batchMode: false,
+  selectedScoreIds: new Set(),
   // Practice & Reminder state
   checkins: [],
   selectedDuration: 30,
@@ -146,16 +148,116 @@ function updateBgSliders(){
   $('overlayVal').textContent = S.bgOverlay+'%';
 }
 
+function compressImageForBg(dataURL) {
+  return new Promise((resolve) => {
+    if (!dataURL || typeof dataURL !== 'string' || !dataURL.startsWith('data:image')) {
+      return resolve(dataURL);
+    }
+    const img = new Image();
+    img.onload = () => {
+      const maxW = 1920, maxH = 1080;
+      let w = img.width, h = img.height;
+      if (w > maxW || h > maxH) {
+        const ratio = Math.min(maxW / w, maxH / h);
+        w = Math.round(w * ratio);
+        h = Math.round(h * ratio);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', 0.82));
+    };
+    img.onerror = () => resolve(dataURL);
+    img.src = dataURL;
+  });
+}
+
+async function syncSettingsToCloud() {
+  const sync = window.SupabaseSyncService;
+  if (!sync || !sync.isLoggedIn()) return;
+  try {
+    await sync.syncUserSettings({
+      bgDataURL: S.bgDataURL,
+      bgBlur: S.bgBlur,
+      bgOverlay: S.bgOverlay,
+      theme: S.theme,
+      categories: S.categories
+    });
+  } catch (err) {
+    console.warn('Sync settings to cloud warning:', err);
+  }
+}
+
+async function applyCloudSettings(settings) {
+  if (!settings) return;
+  let bgChanged = false;
+  if (settings.theme && settings.theme !== S.theme) {
+    S.theme = settings.theme;
+    applyTheme(S.theme);
+    await saveSetting('theme', S.theme);
+  }
+  if (settings.bgDataURL !== undefined && settings.bgDataURL !== S.bgDataURL) {
+    S.bgDataURL = settings.bgDataURL;
+    await saveSetting('bgDataURL', S.bgDataURL);
+    bgChanged = true;
+  }
+  if (settings.bgBlur != null && settings.bgBlur !== S.bgBlur) {
+    S.bgBlur = Number(settings.bgBlur);
+    await saveSetting('bgBlur', S.bgBlur);
+    bgChanged = true;
+  }
+  if (settings.bgOverlay != null && settings.bgOverlay !== S.bgOverlay) {
+    S.bgOverlay = Number(settings.bgOverlay);
+    await saveSetting('bgOverlay', S.bgOverlay);
+    bgChanged = true;
+  }
+  if (Array.isArray(settings.categories) && settings.categories.length > 0) {
+    const localCatMap = new Map(S.categories.map(c => [c.id, c]));
+    let catAdded = false;
+    for (const cc of settings.categories) {
+      if (!localCatMap.has(cc.id)) {
+        localCatMap.set(cc.id, cc);
+        await dbPut('categories', cc);
+        catAdded = true;
+      }
+    }
+    if (catAdded) {
+      S.categories = Array.from(localCatMap.values());
+      renderCategories();
+      updateCatSelects();
+    }
+  }
+  if (bgChanged) {
+    applyBackground();
+    updateBgSliders();
+    if ($('bgPreviewImg')) {
+      if (S.bgDataURL) {
+        $('bgPreviewImg').src = S.bgDataURL;
+        if ($('bgPreviewWrap')) $('bgPreviewWrap').style.display = 'block';
+        if ($('bgUploadHint')) $('bgUploadHint').style.display = 'none';
+      } else {
+        $('bgPreviewImg').src = '';
+        if ($('bgPreviewWrap')) $('bgPreviewWrap').style.display = 'none';
+        if ($('bgUploadHint')) $('bgUploadHint').style.display = '';
+      }
+    }
+  }
+}
+
 async function setBgImage(dataURL){
-  S.bgDataURL = dataURL;
+  const compressed = await compressImageForBg(dataURL);
+  S.bgDataURL = compressed;
   applyBackground();
   // show preview
-  $('bgPreviewImg').src = dataURL;
+  $('bgPreviewImg').src = compressed;
   $('bgPreviewWrap').style.display = 'block';
   $('bgUploadHint').style.display = 'none';
-  await saveSetting('bgDataURL', dataURL);
+  await saveSetting('bgDataURL', compressed);
   await saveSetting('bgBlur', S.bgBlur);
   await saveSetting('bgOverlay', S.bgOverlay);
+  syncSettingsToCloud();
 }
 
 async function removeBgImage(){
@@ -165,6 +267,7 @@ async function removeBgImage(){
   $('bgUploadHint').style.display = '';
   $('bgPreviewImg').src = '';
   await saveSetting('bgDataURL', null);
+  syncSettingsToCloud();
 }
 
 // ─────────────────────────────────────────
@@ -359,7 +462,8 @@ function renderScores(){
     const isFolder = pagesCount > 1;
     const isExpanded = S.expandedFolders.has(score.id);
 
-    card.className='score-card' + (isFolder ? ' is-folder' : '');
+    const isBatchSelected = S.batchMode && S.selectedScoreIds.has(score.id);
+    card.className='score-card' + (isFolder ? ' is-folder' : '') + (isBatchSelected ? ' is-batch-selected' : '');
     card.dataset.id=score.id;
 
     const pageBadge = isFolder
@@ -371,6 +475,21 @@ function renderScores(){
     const tagsHtml=(score.tags||[]).slice(0,3).map(t=>`<span class="tag">${esc(t)}</span>`).join('');
     const diffHtml=score.difficulty?`<div class="diff-badge">${DIFF_LABELS[score.difficulty]||''}</div>`:'';
     const isFav=score.favorite;
+
+    // 可交互乐谱分类徽章（单曲一键快捷分类）
+    const catBadgeHtml = cat
+      ? `<button type="button" class="card-cat-clickable" data-act="quick-cat" data-id="${score.id}" style="color:${cat.color}" title="点击修改《${esc(score.title)}》分类">
+           <span>${esc(cat.emoji || '🎵')}</span>
+           <span>${esc(cat.name)}</span>
+           <span class="card-cat-chevron">▾</span>
+         </button>`
+      : `<button type="button" class="card-cat-clickable unclassified" data-act="quick-cat" data-id="${score.id}" title="点击为《${esc(score.title)}》设置分类">
+           <span>🏷️</span>
+           <span>未分类 · 点此分类</span>
+           <span class="card-cat-chevron">▾</span>
+         </button>`;
+
+    const batchCheckHtml = `<div class="card-batch-check" data-act="toggle-select" data-id="${score.id}" title="勾选/取消勾选">✓</div>`;
 
     let folderBarHtml = '';
     let folderExpandedHtml = '';
@@ -405,6 +524,7 @@ function renderScores(){
     if(S.viewMode==='grid'){
       card.innerHTML=`
         <div class="card-thumb">
+          ${batchCheckHtml}
           ${pageBadge}
           <img src="${score.dataURL}" alt="${esc(score.title)}" loading="lazy"/>
           <div class="card-overlay">
@@ -416,7 +536,7 @@ function renderScores(){
           </div>
         </div>
         <div class="card-body">
-          ${cat?`<div class="card-cat" style="color:${cat.color}">${esc((cat.emoji||'')+'  '+cat.name)}</div>`:''}
+          <div class="card-cat-wrap">${catBadgeHtml}</div>
           <div class="card-title">${esc(score.title)}</div>
           ${score.composer?`<div class="card-composer">🎼 ${esc(score.composer)}</div>`:''}
           <div class="card-tags">${pageTagHtml}${tagsHtml}</div>
@@ -427,12 +547,13 @@ function renderScores(){
     } else {
       card.innerHTML=`
         <div class="card-thumb">
+          ${batchCheckHtml}
           ${pageBadge}
           <img src="${score.dataURL}" alt="${esc(score.title)}" loading="lazy"/>
         </div>
         <div class="card-body">
           <div class="card-main">
-            ${cat?`<div class="card-cat" style="color:${cat.color}">${esc((cat.emoji||'')+' '+cat.name)}</div>`:''}
+            <div class="card-cat-wrap">${catBadgeHtml}</div>
             <div class="card-title">${esc(score.title)}</div>
             ${score.composer?`<div class="card-composer">🎼 ${esc(score.composer)}</div>`:''}
             <div class="card-tags">${pageTagHtml}${tagsHtml}${diffHtml}</div>
@@ -443,6 +564,22 @@ function renderScores(){
     }
 
     card.querySelector('.fav-btn')?.addEventListener('click',e=>{ e.stopPropagation(); toggleFav(score.id); });
+
+    // 快捷单曲分类事件
+    card.querySelectorAll('[data-act="quick-cat"]').forEach(btn=>{
+      btn.addEventListener('click', e=>{
+        e.stopPropagation();
+        openScoreCategoryModal(score.id);
+      });
+    });
+
+    // 批量模式勾选框点击
+    card.querySelectorAll('[data-act="toggle-select"]').forEach(btn=>{
+      btn.addEventListener('click', e=>{
+        e.stopPropagation();
+        toggleSelectScore(score.id);
+      });
+    });
 
     card.querySelectorAll('[data-act="toggle-folder"]').forEach(btn=>{
       btn.addEventListener('click', e=>{
@@ -478,7 +615,13 @@ function renderScores(){
       });
     });
 
-    card.addEventListener('click',()=>openViewer(idx,list,0));
+    card.addEventListener('click',()=>{
+      if(S.batchMode){
+        toggleSelectScore(score.id);
+      } else {
+        openViewer(idx,list,0);
+      }
+    });
     grid.appendChild(card);
   });
 }
@@ -742,6 +885,7 @@ async function saveCat(){
     S.categories.push(c); await dbPut('categories',c); toast('分类已创建','success');
   }
   closeCatModal(); renderAll();
+  syncSettingsToCloud();
 }
 
 async function deleteCategory(id){
@@ -752,6 +896,201 @@ async function deleteCategory(id){
   S.categories=S.categories.filter(c=>c.id!==id);
   if(S.filter===id) setFilter('all'); else renderAll();
   toast('分类已删除');
+  syncSettingsToCloud();
+}
+
+// ─────────────────────────────────────────
+// 🏷️ Quick Category Picker & Batch Mode
+// ─────────────────────────────────────────
+let activeCategoryTargetScoreIds = [];
+let activeCategorySelectedId = '';
+
+function openScoreCategoryModal(scoreIdOrIds) {
+  activeCategoryTargetScoreIds = Array.isArray(scoreIdOrIds) ? scoreIdOrIds : [scoreIdOrIds];
+  if (activeCategoryTargetScoreIds.length === 0) {
+    toast('请先选择要分类的乐谱', 'info');
+    return;
+  }
+
+  const isBatch = activeCategoryTargetScoreIds.length > 1;
+  const titleEl = $('scoreCategoryModalTitle');
+  const descEl = $('scoreCategoryTargetDesc');
+  const removeBtn = $('scoreCategoryRemoveBtn');
+
+  if (isBatch) {
+    if (titleEl) titleEl.textContent = `🏷️ 批量设置分类 (${activeCategoryTargetScoreIds.length} 首)`;
+    if (descEl) descEl.textContent = `已选择 ${activeCategoryTargetScoreIds.length} 首乐谱，请点击选择目标分类：`;
+    if (removeBtn) removeBtn.textContent = `全部移出分类 (设为未分类)`;
+    activeCategorySelectedId = '';
+  } else {
+    const singleScore = S.scores.find(s => s.id === activeCategoryTargetScoreIds[0]);
+    if (titleEl) titleEl.textContent = `🏷️ 设置分类 - 《${singleScore ? singleScore.title : '乐谱'}》`;
+    const curCat = singleScore ? S.categories.find(c => c.id === singleScore.categoryId) : null;
+    if (descEl) descEl.textContent = `当前所属：${curCat ? (curCat.emoji || '') + ' ' + curCat.name : '未分类'}，请点击选择新分类：`;
+    if (removeBtn) removeBtn.textContent = `移出分类 (设为未分类)`;
+    activeCategorySelectedId = singleScore ? (singleScore.categoryId || '') : '';
+  }
+
+  renderCategoryPickerGrid();
+  if ($('scoreCategoryBackdrop')) $('scoreCategoryBackdrop').classList.add('open');
+}
+
+function closeScoreCategoryModal() {
+  if ($('scoreCategoryBackdrop')) $('scoreCategoryBackdrop').classList.remove('open');
+}
+
+function renderCategoryPickerGrid() {
+  const grid = $('categoryPickerGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+
+  S.categories.forEach(cat => {
+    const item = document.createElement('div');
+    const isSel = (cat.id === activeCategorySelectedId);
+    item.className = 'cat-picker-item' + (isSel ? ' active' : '');
+    item.innerHTML = `
+      <span class="cat-picker-emoji">${esc(cat.emoji || '🎵')}</span>
+      <span class="cat-picker-name" style="color:${cat.color}">${esc(cat.name)}</span>
+    `;
+    item.addEventListener('click', () => {
+      activeCategorySelectedId = cat.id;
+      renderCategoryPickerGrid();
+    });
+    grid.appendChild(item);
+  });
+}
+
+async function confirmScoreCategory() {
+  if (activeCategoryTargetScoreIds.length === 0) return;
+  const targetCatId = activeCategorySelectedId;
+  const cat = S.categories.find(c => c.id === targetCatId);
+  const sync = window.SupabaseSyncService;
+
+  for (const id of activeCategoryTargetScoreIds) {
+    const s = S.scores.find(x => x.id === id);
+    if (s) {
+      s.categoryId = targetCatId;
+      s.updatedAt = Date.now();
+      await dbPut('scores', s);
+      if (sync && sync.isLoggedIn()) {
+        sync.uploadSingleScoreToCloud(s).catch(e => console.warn('Cloud sync error for score', s.id, e));
+      }
+    }
+  }
+
+  closeScoreCategoryModal();
+  if (S.batchMode) {
+    exitBatchMode();
+  }
+  renderScores();
+  renderSidebar();
+  renderViewer();
+  const catName = cat ? `${cat.emoji || ''} ${cat.name}` : '未分类';
+  toast(`已成功将 ${activeCategoryTargetScoreIds.length} 首乐谱移至「${catName}」 🎵`, 'success');
+}
+
+async function removeScoreCategory() {
+  if (activeCategoryTargetScoreIds.length === 0) return;
+  const sync = window.SupabaseSyncService;
+
+  for (const id of activeCategoryTargetScoreIds) {
+    const s = S.scores.find(x => x.id === id);
+    if (s) {
+      s.categoryId = '';
+      s.updatedAt = Date.now();
+      await dbPut('scores', s);
+      if (sync && sync.isLoggedIn()) {
+        sync.uploadSingleScoreToCloud(s).catch(e => console.warn('Cloud sync error for score', s.id, e));
+      }
+    }
+  }
+
+  closeScoreCategoryModal();
+  if (S.batchMode) {
+    exitBatchMode();
+  }
+  renderScores();
+  renderSidebar();
+  renderViewer();
+  toast(`已将 ${activeCategoryTargetScoreIds.length} 首乐谱设为未分类`, 'info');
+}
+
+async function quickCreateAndSelectCat() {
+  const name = $('quickNewCatName') ? $('quickNewCatName').value.trim() : '';
+  const emoji = ($('quickNewCatEmoji') ? $('quickNewCatEmoji').value.trim() : '') || '🎵';
+  if (!name) {
+    toast('请输入新分类名称', 'info');
+    return;
+  }
+  const newCat = {
+    id: uid(),
+    name,
+    color: '#a78bfa',
+    emoji,
+    createdAt: Date.now()
+  };
+  S.categories.push(newCat);
+  await dbPut('categories', newCat);
+  renderCategories();
+  updateCatSelects();
+  syncSettingsToCloud();
+
+  if ($('quickNewCatName')) $('quickNewCatName').value = '';
+  activeCategorySelectedId = newCat.id;
+  renderCategoryPickerGrid();
+  toast(`分类「${emoji} ${name}」创建成功！`, 'success');
+}
+
+function toggleBatchMode() {
+  if (S.batchMode) {
+    exitBatchMode();
+  } else {
+    enterBatchMode();
+  }
+}
+
+function enterBatchMode() {
+  S.batchMode = true;
+  S.selectedScoreIds.clear();
+  if ($('batchToggleBtn')) $('batchToggleBtn').classList.add('active');
+  if ($('batchActionBar')) $('batchActionBar').style.display = 'flex';
+  const main = $('mainContent');
+  if (main) main.classList.add('batch-mode');
+  updateBatchUI();
+  renderScores();
+  toast('已开启批量多选模式，点击乐谱卡片即可勾选', 'info');
+}
+
+function exitBatchMode() {
+  S.batchMode = false;
+  S.selectedScoreIds.clear();
+  if ($('batchToggleBtn')) $('batchToggleBtn').classList.remove('active');
+  if ($('batchActionBar')) $('batchActionBar').style.display = 'none';
+  const main = $('mainContent');
+  if (main) main.classList.remove('batch-mode');
+  renderScores();
+}
+
+function toggleSelectScore(id) {
+  if (S.selectedScoreIds.has(id)) {
+    S.selectedScoreIds.delete(id);
+  } else {
+    S.selectedScoreIds.add(id);
+  }
+  updateBatchUI();
+  const card = document.querySelector(`.score-card[data-id="${id}"]`);
+  if (card) {
+    card.classList.toggle('is-batch-selected', S.selectedScoreIds.has(id));
+  }
+}
+
+function updateBatchUI() {
+  const count = S.selectedScoreIds.size;
+  if ($('batchSelectedCount')) $('batchSelectedCount').textContent = `已选 ${count} 首`;
+  if ($('batchApplyCategoryBtn')) {
+    $('batchApplyCategoryBtn').disabled = (count === 0);
+    $('batchApplyCategoryBtn').textContent = `📂 设置分类 (${count})`;
+  }
 }
 
 // ─────────────────────────────────────────
@@ -818,7 +1157,12 @@ function renderViewer(){
   if(S.viewerPageIdx < 0) S.viewerPageIdx = 0;
 
   $('viewerTitle').textContent = score.title;
-  $('viewerCat').textContent = cat ? `${cat.emoji||''} ${cat.name}` : '未分类';
+  if ($('viewerCat')) {
+    $('viewerCat').textContent = (cat ? `${cat.emoji||''} ${cat.name}` : '未分类') + ' ▾';
+    $('viewerCat').title = '点击修改此乐谱分类';
+    $('viewerCat').style.cursor = 'pointer';
+    $('viewerCat').onclick = () => openScoreCategoryModal(score.id);
+  }
   $('viewerComposer').textContent = score.composer ? `🎼 ${score.composer}` : '';
   $('viewerDiff').textContent = score.difficulty ? (DIFF_LABELS[score.difficulty]||'') : '';
 
@@ -2327,6 +2671,38 @@ function bindEvents(){
     b.addEventListener('click',()=>{ S.selEmoji=b.dataset.emoji; document.querySelectorAll('.emoji-btn').forEach(x=>x.classList.remove('active')); b.classList.add('active'); });
   });
 
+  // Batch Mode Events
+  $('batchToggleBtn')?.addEventListener('click', toggleBatchMode);
+  $('batchCancelBtn')?.addEventListener('click', exitBatchMode);
+  $('batchSelectAllBtn')?.addEventListener('click', () => {
+    getFiltered().forEach(s => S.selectedScoreIds.add(s.id));
+    updateBatchUI();
+    renderScores();
+  });
+  $('batchDeselectAllBtn')?.addEventListener('click', () => {
+    S.selectedScoreIds.clear();
+    updateBatchUI();
+    renderScores();
+  });
+  $('batchApplyCategoryBtn')?.addEventListener('click', () => {
+    if (S.selectedScoreIds.size === 0) {
+      toast('请先勾选需要分类的乐谱', 'info');
+      return;
+    }
+    openScoreCategoryModal(Array.from(S.selectedScoreIds));
+  });
+
+  // Score Category Modal Events
+  $('scoreCategoryModalClose')?.addEventListener('click', closeScoreCategoryModal);
+  $('scoreCategoryCancelBtn')?.addEventListener('click', closeScoreCategoryModal);
+  $('scoreCategoryConfirmBtn')?.addEventListener('click', confirmScoreCategory);
+  $('scoreCategoryRemoveBtn')?.addEventListener('click', removeScoreCategory);
+  $('quickNewCatBtn')?.addEventListener('click', quickCreateAndSelectCat);
+  $('quickNewCatName')?.addEventListener('keydown', e => { if (e.key === 'Enter') quickCreateAndSelectCat(); });
+  $('scoreCategoryBackdrop')?.addEventListener('click', e => {
+    if (e.target === $('scoreCategoryBackdrop')) closeScoreCategoryModal();
+  });
+
   // Viewer Actions
   $('viewerClose').addEventListener('click',closeViewer);
   $('viewerBackBtn')?.addEventListener('click',closeViewer);
@@ -3071,12 +3447,8 @@ async function handleAuthSubmit() {
       toast('🎉 登录成功！已连接云端', 'success');
       closeAuthModal();
 
-      // Check if local scores exist -> prompt merge
-      if (S.scores && S.scores.length > 0) {
-        setTimeout(openDataMergeModal, 500);
-      } else {
-        performFullSync(false);
-      }
+      // 无论本地是否有乐谱，登录后直接执行双向全量同步
+      await performFullSync(false);
     } else {
       // Register
       if (password.length < 6) {
@@ -3090,11 +3462,7 @@ async function handleAuthSubmit() {
       if (res.autoLoggedIn) {
         toast('🎉 注册成功！已自动登录', 'success');
         closeAuthModal();
-        if (S.scores && S.scores.length > 0) {
-          setTimeout(openDataMergeModal, 500);
-        } else {
-          performFullSync(false);
-        }
+        await performFullSync(false);
       } else {
         setAuthNotice('注册成功！若您的项目开启了邮箱验证，请查收邮件确认后再登录。', 'success');
         switchAuthTab('login');
@@ -3223,27 +3591,56 @@ async function performFullSync(silent = false) {
 
   sync.isSyncing = true;
   sync.notifyStateChange();
-  if (!silent) toast('🔄 正在同步云端乐谱与打卡数据...', 'info');
+  if (!silent) toast('🔄 正在同步云端乐谱与个性化配置...', 'info');
 
   try {
-    // 1. 上传本地乐谱
+    // 0. 同步云端用户配置（背景壁纸、模糊度、主题、自定义分类）
+    const cloudSettings = sync.fetchUserSettings();
+    if (cloudSettings) {
+      await applyCloudSettings(cloudSettings);
+    } else {
+      // 若云端尚无配置，将本地当前配置上报至云端
+      await syncSettingsToCloud();
+    }
+
+    // 1. 同步本地自定义分类到云端
+    await syncSettingsToCloud();
+
+    // 2. 拉取云端乐谱并合并
+    const cloudScores = await sync.fetchCloudScores();
+    if ($('syncCloudCount')) $('syncCloudCount').textContent = cloudScores.length;
+
+    // 检查本地是否仅仅只有初次安装生成的 2 首演示乐谱（月光奏鸣曲、降E大调夜曲）
+    const hasOnlyDemoScores = (
+      S.scores.length > 0 &&
+      S.scores.length <= 2 &&
+      S.scores.every(s => (s.title && (s.title.includes('月光奏鸣曲') || s.title.includes('降E大调夜曲'))))
+    );
+
+    // 如果云端已有用户自身的数据，且本地仅是未做更改的演示曲，则清理演示曲以云端数据为主
+    if (cloudScores.length > 0 && hasOnlyDemoScores) {
+      for (const ds of S.scores) {
+        await dbDel('scores', ds.id);
+      }
+      S.scores = [];
+    }
+
+    // 上传本地乐谱
     for (const score of S.scores) {
       await sync.uploadSingleScoreToCloud(score);
     }
-    // 2. 上传本地打卡
+
+    // 上传本地打卡
     for (const chk of S.checkins) {
       await sync.uploadSingleCheckinToCloud(chk);
     }
 
-    // 3. 拉取云端乐谱并合并
-    const cloudScores = await sync.fetchCloudScores();
-    if ($('syncCloudCount')) $('syncCloudCount').textContent = cloudScores.length;
-
+    // 将云端乐谱合并到本地
     const localScoreMap = new Map(S.scores.map(s => [String(s.id), s]));
     let scoreChanged = false;
     for (const cs of cloudScores) {
       const local = localScoreMap.get(String(cs.id));
-      if (!local) {
+      if (!local || (cs.updatedAt && cs.updatedAt > (local.updatedAt || 0)) || local.categoryId !== cs.categoryId) {
         localScoreMap.set(String(cs.id), cs);
         await dbPut('scores', cs);
         scoreChanged = true;
@@ -3255,7 +3652,7 @@ async function performFullSync(silent = false) {
       renderSidebar();
     }
 
-    // 4. 拉取云端打卡并合并
+    // 3. 拉取云端打卡并合并
     const cloudCheckins = await sync.fetchCloudCheckins();
     const localCheckinMap = new Map(S.checkins.map(c => [String(c.id), c]));
     let checkinChanged = false;
@@ -3275,7 +3672,7 @@ async function performFullSync(silent = false) {
     sync.setLastSyncTime(new Date().toISOString());
     sync.isSyncing = false;
     sync.notifyStateChange();
-    if (!silent) toast('🎉 云端数据同步完成！已多设备互通', 'success');
+    if (!silent) toast('🎉 云端数据同步完成！乐谱与配置已就绪', 'success');
   } catch (err) {
     console.warn('Sync failed', err);
     sync.isSyncing = false;

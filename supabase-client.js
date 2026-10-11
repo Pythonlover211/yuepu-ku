@@ -437,17 +437,22 @@
 
       const scoreId = String(score.id);
 
+      // 提取页面列表（兼容器件：支持 string 数组或 object 数组）
+      const rawPages = (Array.isArray(score.pages) && score.pages.length > 0)
+        ? score.pages
+        : (score.dataURL ? [score.dataURL] : []);
+
       // 1. 同步主表记录
       const scorePayload = {
         id: scoreId,
         user_id: user.id,
         title: score.title || '未命名乐谱',
         composer: score.composer || '',
-        category: score.category || 'classical',
+        category: score.categoryId || score.category || 'classical',
         difficulty: Number(score.difficulty) || 1,
         tags: Array.isArray(score.tags) ? score.tags : [],
-        is_favorite: Boolean(score.isFavorite),
-        is_folder: Boolean(score.isFolder),
+        is_favorite: Boolean(score.favorite != null ? score.favorite : score.isFavorite),
+        is_folder: Boolean(score.isFolder || rawPages.length > 1),
         folder_name: score.folderName || '',
         updated_at: score.updatedAt ? new Date(score.updatedAt).toISOString() : new Date().toISOString()
       };
@@ -458,23 +463,29 @@
         body: JSON.stringify(scorePayload)
       });
 
-      // 2. 同步页面与图片
-      const pages = Array.isArray(score.pages) && score.pages.length > 0
-        ? score.pages
-        : [{ pageOrder: 0, image: score.image, annotations: score.annotations || [] }];
+      // 2. 同步页面与图片数据
+      const pagesToSync = rawPages.length > 0 ? rawPages : [score.dataURL || ''];
 
-      for (let i = 0; i < pages.length; i++) {
-        const page = pages[i];
-        let remoteImageUrl = page.image;
+      for (let i = 0; i < pagesToSync.length; i++) {
+        const pageItem = pagesToSync[i];
+        let rawImageUrl = typeof pageItem === 'string'
+          ? pageItem
+          : (pageItem.image || pageItem.dataURL || score.dataURL || '');
+        let annotations = (typeof pageItem === 'object' && pageItem.annotations)
+          ? pageItem.annotations
+          : (score.annotations || []);
 
-        // 如果图片是本地 base64 数据，上传到 Storage
-        if (typeof remoteImageUrl === 'string' && remoteImageUrl.startsWith('data:')) {
-          const ext = remoteImageUrl.includes('png') ? 'png' : 'jpg';
-          const remotePath = `${user.id}/${scoreId}_page_${i}_${Date.now()}.${ext}`;
+        let finalImageUrl = rawImageUrl;
+
+        // 若是 base64 数据，优先尝试上传到 Storage，如果 Storage 失败则保底存入 image_url 文本中，确保绝不丢图
+        if (typeof rawImageUrl === 'string' && rawImageUrl.startsWith('data:')) {
+          const ext = rawImageUrl.includes('svg') ? 'svg' : (rawImageUrl.includes('png') ? 'png' : 'jpg');
+          const remotePath = `${user.id}/${scoreId}_p${i}_${Date.now()}.${ext}`;
           try {
-            remoteImageUrl = await this.uploadImage(page.image, remotePath);
+            finalImageUrl = await this.uploadImage(rawImageUrl, remotePath);
           } catch (uploadErr) {
-            console.warn(`Upload image page ${i} error`, uploadErr);
+            console.warn(`Storage upload unavailable for page ${i}, fallback to direct data storage:`, uploadErr.message);
+            finalImageUrl = rawImageUrl;
           }
         }
 
@@ -484,8 +495,8 @@
           score_id: scoreId,
           user_id: user.id,
           page_order: i,
-          image_url: remoteImageUrl || '',
-          annotations: page.annotations || [],
+          image_url: finalImageUrl || '',
+          annotations: annotations || [],
           updated_at: new Date().toISOString()
         };
 
@@ -524,7 +535,63 @@
     }
 
     /**
-     * 从云端拉取所有乐谱及页面
+     * 同步用户个性化配置（背景壁纸、模糊度、遮罩透明度、主题及自定义分类）到云端
+     */
+    async syncUserSettings(settings = {}) {
+      await this.refreshSessionIfNeeded();
+      const token = this.getAccessToken();
+      if (!token) return null;
+
+      const cleanBase = this.cleanUrl(this.config.url);
+      const url = `${cleanBase}/auth/v1/user`;
+
+      const currentSettings = this.fetchUserSettings() || {};
+      const mergedSettings = {
+        ...currentSettings,
+        ...settings,
+        updatedAt: new Date().toISOString()
+      };
+
+      try {
+        const res = await fetch(url, {
+          method: 'PUT',
+          headers: {
+            'apikey': this.config.anonKey,
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            data: {
+              app_settings: mergedSettings
+            }
+          })
+        });
+
+        if (res.ok) {
+          const freshUser = await res.json();
+          if (this.session) {
+            this.session.user = freshUser;
+            this.saveSession(this.session);
+          }
+          return mergedSettings;
+        }
+      } catch (err) {
+        console.warn('syncUserSettings failed:', err);
+      }
+      return null;
+    }
+
+    /**
+     * 从当前登录会话中获取云端保存的个性化配置
+     */
+    fetchUserSettings() {
+      const user = this.getUser();
+      if (!user || !user.user_metadata) return null;
+      return user.user_metadata.app_settings || null;
+    }
+
+    /**
+     * 从云端拉取所有乐谱及页面，并精准对齐本地数据模型
      */
     async fetchCloudScores() {
       const cloudScores = await this.restRequest('scores?select=*&order=created_at.desc');
@@ -545,19 +612,25 @@
 
       return cloudScores.map(cs => {
         const scorePages = pageMap[cs.id] || [];
+        const pageUrls = scorePages.map(p => p.image).filter(Boolean);
+        const primaryImage = pageUrls[0] || '';
+
         return {
           id: cs.id,
           title: cs.title,
           composer: cs.composer || '',
+          categoryId: cs.category || 'classical',
           category: cs.category || 'classical',
           difficulty: cs.difficulty || 1,
-          tags: cs.tags || [],
+          tags: Array.isArray(cs.tags) ? cs.tags : [],
+          favorite: Boolean(cs.is_favorite),
           isFavorite: Boolean(cs.is_favorite),
-          isFolder: Boolean(cs.is_folder),
+          isFolder: Boolean(cs.is_folder || pageUrls.length > 1),
           folderName: cs.folder_name || '',
-          pages: scorePages,
-          image: scorePages[0] ? scorePages[0].image : '',
-          annotations: scorePages[0] ? scorePages[0].annotations : [],
+          // 确保 pages 数组是 string[] 形式，完全符合渲染器与乐谱夹逻辑
+          pages: pageUrls.length > 0 ? pageUrls : (primaryImage ? [primaryImage] : []),
+          dataURL: primaryImage,
+          annotations: scorePages[0] ? scorePages[0].annotations : {},
           createdAt: new Date(cs.created_at).getTime(),
           updatedAt: new Date(cs.updated_at).getTime()
         };
